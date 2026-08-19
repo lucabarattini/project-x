@@ -1,0 +1,10 @@
+[
+  {
+    "company": "Amazon",
+    "token": "amazon-usa",
+    "source": "amazon.jobs-search-json,JobsScraper-concept",
+    "boardUrl": "https://www.amazon.jobs/en/search?country=USA",
+    "apiUrl": "https://www.amazon.jobs/en/search.json?country=USA",
+    "lastVerifiedJobCount": 10000
+  }
+]

@@ -1,0 +1,10 @@
+[
+  {
+    "company": "Google",
+    "token": "google-careers-us",
+    "source": "google-careers-html,user-supplied-repo-concept,image-2",
+    "boardUrl": "https://www.google.com/about/careers/applications/jobs/results/?location=United%20States",
+    "apiUrl": "https://www.google.com/about/careers/applications/jobs/results/?location=United%20States",
+    "lastVerifiedJobCount": 2052
+  }
+]

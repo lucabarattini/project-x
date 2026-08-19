@@ -1,0 +1,316 @@
+import { unstable_cache } from "next/cache";
+import { compactExperienceEvidence } from "./display";
+import { amazonBoards, fetchLatestAmazonJobs } from "./providers/amazon";
+import { ashbyBoards, fetchLatestAshbyJobs } from "./providers/ashby";
+import { fetchLatestGoogleJobs, googleBoards } from "./providers/google";
+import {
+  fetchLatestGreenhouseJobs,
+  greenhouseBoards,
+  type GreenhouseBoard,
+  type GreenhouseJob,
+} from "./providers/greenhouse";
+import { fetchLatestLeverJobs, leverBoards } from "./providers/lever";
+import { fetchLatestWorkdayJobs, workdayBoards } from "./providers/workday";
+import {
+  customCareerBoards,
+  fetchLatestCustomCareerJobs,
+} from "./providers/custom-careers";
+import { buildSearchEntry, type JobSearchEntry, type SearchJob } from "./search-model";
+
+export type JobBoard = GreenhouseBoard;
+export type Job = SearchJob;
+
+export interface JobProvider {
+  id: string;
+  fetchJobs(board: BoardConfig): Promise<Job[]>;
+}
+
+export type BoardConfig = {
+  company: string;
+  provider: string;
+  careersUrl: string;
+  endpointOrSlug: string;
+  evidenceUrl: string;
+  verifiedAt: string;
+  status: "live" | "discovered" | "blocked";
+};
+
+export const jobBoards: JobBoard[] = [
+  ...greenhouseBoards,
+  ...ashbyBoards,
+  ...leverBoards,
+  ...workdayBoards,
+  ...amazonBoards,
+  ...googleBoards,
+  ...customCareerBoards,
+];
+
+export type ProviderDiagnostic = {
+  provider: string;
+  status: "ok" | "error" | "timeout";
+  jobCount: number;
+  durationMs: number;
+  message: string | null;
+};
+
+export type JobSnapshot = {
+  entries: JobSearchEntry[];
+  fetchedAt: string;
+  diagnostics: ProviderDiagnostic[];
+};
+
+type FetchJobsOptions = {
+  amazonLimit?: number;
+  googleLimit?: number;
+  googlePages?: number;
+  greenhouseDetailLimit?: number;
+};
+
+const snapshotTtlMs = 300 * 1000;
+
+/**
+ * Chunk size for the durable snapshot cache. Next.js refuses to persist
+ * unstable_cache entries larger than 2 MB; the full snapshot (11k+ entries)
+ * is ~14 MB, so we split it into small chunks that each fit comfortably.
+ */
+const snapshotChunkSize = 600;
+
+type ProviderRun = {
+  provider: string;
+  timeoutMs: number;
+  run: () => Promise<GreenhouseJob[]>;
+};
+
+const TIMEOUT_SENTINEL = "provider-timeout";
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(TIMEOUT_SENTINEL)), timeoutMs);
+    }),
+  ]);
+}
+
+async function runProvider(run: ProviderRun) {
+  const startedAt = Date.now();
+  try {
+    const jobs = await withTimeout(run.run(), run.timeoutMs);
+    return {
+      jobs,
+      diagnostic: {
+        provider: run.provider,
+        status: "ok" as const,
+        jobCount: jobs.length,
+        durationMs: Date.now() - startedAt,
+        message: null,
+      },
+    };
+  } catch (error) {
+    const timedOut = error instanceof Error && error.message === TIMEOUT_SENTINEL;
+    return {
+      jobs: [],
+      diagnostic: {
+        provider: run.provider,
+        status: timedOut ? ("timeout" as const) : ("error" as const),
+        jobCount: 0,
+        durationMs: Date.now() - startedAt,
+        message: timedOut
+          ? `Timed out after ${run.timeoutMs / 1000}s`
+          : error instanceof Error
+            ? error.message.slice(0, 240)
+            : "Unknown provider error",
+      },
+    };
+  }
+}
+
+function buildProviders(options: FetchJobsOptions): ProviderRun[] {
+  return [
+    {
+      provider: "greenhouse",
+      timeoutMs: 30_000,
+      run: () => fetchLatestGreenhouseJobs({ detailLimit: options.greenhouseDetailLimit ?? 120 }),
+    },
+    {
+      provider: "ashby",
+      timeoutMs: 25_000,
+      run: () => fetchLatestAshbyJobs(),
+    },
+    {
+      provider: "lever",
+      timeoutMs: 20_000,
+      run: () => fetchLatestLeverJobs(),
+    },
+    {
+      provider: "workday",
+      timeoutMs: 20_000,
+      run: () => fetchLatestWorkdayJobs(),
+    },
+    {
+      provider: "amazon",
+      timeoutMs: 30_000,
+      run: () => fetchLatestAmazonJobs({ maxJobs: options.amazonLimit ?? 300 }),
+    },
+    {
+      provider: "google",
+      timeoutMs: 30_000,
+      run: () => fetchLatestGoogleJobs({
+        maxJobs: options.googleLimit ?? 400,
+        maxPages: options.googlePages ?? 12,
+      }),
+    },
+    {
+      provider: "custom",
+      timeoutMs: 15_000,
+      run: () => fetchLatestCustomCareerJobs(),
+    },
+  ];
+}
+
+type ChunkValue = {
+  items: JobSearchEntry[];
+  fetchedAt: string;
+  jobCount: number;
+  diagnostics: ProviderDiagnostic[];
+};
+
+/**
+ * Fetches and normalizes the full snapshot. Expensive (all providers), so it
+ * runs at most once per process and is persisted as small chunks below.
+ */
+async function buildSnapshotInternal(): Promise<JobSnapshot> {
+  const results = await Promise.all(buildProviders({}).map(runProvider));
+
+  const seen = new Set<string>();
+  const jobs = results
+    .flatMap((result) => result.jobs)
+    .filter((job) => {
+      const key = `${job.boardToken}:${job.id}`;
+      const fallbackKey = `url:${job.absoluteUrl}`;
+      if (seen.has(key) || seen.has(fallbackKey)) return false;
+      seen.add(key);
+      seen.add(fallbackKey);
+      return true;
+    })
+    .sort((a, b) => {
+      const left = a.postedAt ? Date.parse(a.postedAt) : 0;
+      const right = b.postedAt ? Date.parse(b.postedAt) : 0;
+      return right - left;
+    })
+    .map((job) => ({
+      ...job,
+      contentText: compactExperienceEvidence(job.contentText),
+    }));
+
+  return {
+    entries: jobs.map(buildSearchEntry),
+    fetchedAt: new Date().toISOString(),
+    diagnostics: results.map((result) => result.diagnostic),
+  };
+}
+
+let snapshotBuild: Promise<JobSnapshot> | null = null;
+
+function ensureSnapshotBuild(): Promise<JobSnapshot> {
+  if (!snapshotBuild) {
+    snapshotBuild = buildSnapshotInternal().finally(() => {
+      snapshotBuild = null;
+    });
+  }
+  return snapshotBuild;
+}
+
+/**
+ * One slice of the snapshot, persisted in the Next.js data cache for 300 s.
+ * Chunk 0 has a fixed key and carries the snapshot metadata; every later
+ * chunk is keyed by the snapshot's fetchedAt so a rebuild never mixes data
+ * from two different fetches.
+ */
+const getSnapshotChunk = unstable_cache(
+  // The key is "index" for chunk 0 and "index:fetchedAt" for every later
+  // chunk, so a rebuild never mixes chunks from two different fetches.
+  async (key: string): Promise<ChunkValue> => {
+    const snapshot = await ensureSnapshotBuild();
+    const separator = key.indexOf(":");
+    const index = separator >= 0 ? Number(key.slice(0, separator)) : Number(key);
+    const start = index * snapshotChunkSize;
+    return {
+      items: snapshot.entries.slice(start, start + snapshotChunkSize),
+      fetchedAt: snapshot.fetchedAt,
+      jobCount: snapshot.entries.length,
+      diagnostics: snapshot.diagnostics,
+    };
+  },
+  ["job-snapshot-chunk-v8"],
+  { revalidate: 300 },
+);
+
+let moduleSnapshot: JobSnapshot | null = null;
+
+/**
+ * Builds a fresh snapshot, then writes it into the persisted chunk cache.
+ * Concurrent callers share the same in-flight build.
+ */
+async function buildAndCache(): Promise<JobSnapshot> {
+  if (!snapshotBuild) {
+    snapshotBuild = (async () => {
+      const snapshot = await buildSnapshotInternal();
+      try {
+        const chunkCount = Math.ceil(snapshot.entries.length / snapshotChunkSize);
+        await Promise.all([
+          getSnapshotChunk("0"),
+          ...Array.from({ length: chunkCount - 1 }, (_, index) =>
+            getSnapshotChunk(`${index + 1}:${snapshot.fetchedAt}`),
+          ),
+        ]);
+      } catch {
+        // Cache warming is best-effort; the module snapshot is still served.
+      }
+      return snapshot;
+    })().finally(() => {
+      snapshotBuild = null;
+    });
+  }
+  return snapshotBuild;
+}
+
+/**
+ * Correct caching model: the module copy is only a fast path. Once it is
+ * older than the TTL it is discarded and the persisted (cross-bundle) chunks
+ * are re-read; if those are also expired, the rebuild blocks that one request
+ * — exactly "expiration is refreshed by the first subsequent request".
+ */
+export async function getSnapshot(): Promise<JobSnapshot> {
+  if (moduleSnapshot && Date.now() - Date.parse(moduleSnapshot.fetchedAt) < snapshotTtlMs) {
+    return moduleSnapshot;
+  }
+
+  try {
+    const first = await getSnapshotChunk("0");
+    const chunkCount = Math.ceil(first.jobCount / snapshotChunkSize);
+    const rest = chunkCount > 1
+      ? await Promise.all(
+          Array.from({ length: chunkCount - 1 }, (_, index) =>
+            getSnapshotChunk(`${index + 1}:${first.fetchedAt}`),
+          ),
+        )
+      : [];
+    const snapshot: JobSnapshot = {
+      entries: [...first.items, ...rest.flatMap((chunk) => chunk.items)],
+      fetchedAt: first.fetchedAt,
+      diagnostics: first.diagnostics,
+    };
+    moduleSnapshot = snapshot;
+    return snapshot;
+  } catch {
+    const snapshot = await buildAndCache();
+    moduleSnapshot = snapshot;
+    return snapshot;
+  }
+}
+
+export async function fetchLatestJobs(): Promise<Job[]> {
+  const snapshot = await getSnapshot();
+  return snapshot.entries.map((entry) => entry.job);
+}

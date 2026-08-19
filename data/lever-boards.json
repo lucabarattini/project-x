@@ -1,0 +1,10 @@
+[
+  {
+    "company": "TGS Management",
+    "token": "tgsmc",
+    "source": "user-plan,internet-search,internet-probe,official-careers-page",
+    "boardUrl": "https://jobs.lever.co/tgsmc",
+    "apiUrl": "https://api.lever.co/v0/postings/tgsmc?mode=json",
+    "lastVerifiedJobCount": 0
+  }
+]

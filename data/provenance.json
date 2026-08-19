@@ -1,0 +1,45 @@
+{
+  "code": [
+    {
+      "source": "local source repository snapshot",
+      "commit": "0b35e8786051b328e95ec30d0791b630084eb8d7",
+      "license": "MIT"
+    }
+  ],
+  "providers": [
+    {
+      "provider": "Greenhouse",
+      "status": "implemented",
+      "evidence": "data/greenhouse-boards.json"
+    },
+    {
+      "provider": "Ashby",
+      "status": "implemented",
+      "evidence": "data/ashby-boards.json"
+    },
+    {
+      "provider": "Amazon Careers",
+      "status": "implemented",
+      "evidence": "data/amazon-boards.json"
+    },
+    {
+      "provider": "Google Careers",
+      "status": "implemented",
+      "evidence": "data/google-boards.json"
+    },
+    {
+      "provider": "Lever, Workday, iCIMS, official custom careers pages",
+      "status": "implemented",
+      "evidence": "data/lever-boards.json, data/workday-boards.json, data/custom-careers-boards.json"
+    },
+    {
+      "provider": "Comeet API",
+      "status": "blocked-for-aggregator-use",
+      "evidence": "Cyera exposes public Comeet job links from its official careers page; the tenant API token is not public."
+    }
+  ],
+  "logos": {
+    "path": "public/company-logos",
+    "notice": "Company logos and trademarks belong to their respective owners and are not licensed under MIT."
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "project-x",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "tsx --test $(find src -name '*.test.ts' -print)",
+    "generate:logos": "node scripts/generate-company-logos.mjs",
+    "sync:apify-hiring": "tsx scripts/sync-apify-hiring-task.ts",
+    "verify:posted-dates": "node scripts/verify-posted-dates.mjs",
+    "verify:google-dates": "tsx scripts/verify-google-posted-dates.ts"
+  },
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1",
+    "exceljs": "^4.4.0",
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.0",
+    "sharp": "^0.35.3",
+    "simple-icons": "^16.28.0",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.8",
+    "typescript": "^5"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
+  }
+}

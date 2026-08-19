@@ -1,0 +1,29 @@
+[
+  {
+    "company": "Susquehanna International Group",
+    "token": "icims-sig",
+    "source": "official-careers-page,public-icims-html",
+    "boardUrl": "https://careers-sig.icims.com/jobs/search?ss=1&in_iframe=1",
+    "apiUrl": "https://careers-sig.icims.com/jobs/search?ss=1&in_iframe=1",
+    "lastVerifiedJobCount": 20,
+    "kind": "icims"
+  },
+  {
+    "company": "Renaissance Technologies",
+    "token": "renaissance-technologies",
+    "source": "official-careers-page,public-html",
+    "boardUrl": "https://www.rentec.com/Careers.action?jobs=true",
+    "apiUrl": "https://www.rentec.com/Careers.action?jobs=true",
+    "lastVerifiedJobCount": 12,
+    "kind": "renaissance"
+  },
+  {
+    "company": "Cyera",
+    "token": "cyera-comeet",
+    "source": "official-careers-page,public-comeet-links",
+    "boardUrl": "https://www.cyera.com/careers",
+    "apiUrl": "https://www.cyera.com/careers",
+    "lastVerifiedJobCount": 15,
+    "kind": "cyera"
+  }
+]

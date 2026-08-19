@@ -1,0 +1,11 @@
+[
+  {
+    "company": "Arrowstreet Capital",
+    "token": "arrowstreetcapital/Arrowstreet",
+    "source": "user-plan,internet-search,internet-probe,official-careers-page",
+    "boardUrl": "https://arrowstreetcapital.wd5.myworkdayjobs.com/en-US/Arrowstreet",
+    "apiUrl": "https://arrowstreetcapital.wd5.myworkdayjobs.com/wday/cxs/arrowstreetcapital/Arrowstreet/jobs",
+    "detailUrlBase": "https://arrowstreetcapital.wd5.myworkdayjobs.com/wday/cxs/arrowstreetcapital/Arrowstreet",
+    "lastVerifiedJobCount": 21
+  }
+]

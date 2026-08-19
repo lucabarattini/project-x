@@ -1,0 +1,75 @@
+{
+  "generatedAt": "2026-08-06",
+  "notes": [
+    "Greenhouse candidates below were verified with boards-api.greenhouse.io and have been added to data/greenhouse-boards.json.",
+    "Ashby candidates below were verified with api.ashbyhq.com/posting-api/job-board/{slug} and have been added to data/ashby-boards.json.",
+    "SmartRecruiters probe results were noisy and are intentionally excluded from verified low-hanging fruit until manually checked against official careers pages."
+  ],
+  "greenhouseAdded": [
+    { "company": "PDT Partners", "slug": "pdtpartners", "jobs": 10 },
+    { "company": "Point72", "slug": "point72", "jobs": 231 },
+    { "company": "Jump Trading", "slug": "jumptrading", "jobs": 105 },
+    { "company": "Quadrature Capital", "slug": "quadraturecapital", "jobs": 4 },
+    { "company": "Virtu Financial", "slug": "virtu", "jobs": 46 },
+    { "company": "Tower Research Capital", "slug": "towerresearchcapital", "jobs": 74 },
+    { "company": "AQR", "slug": "aqr", "jobs": 46 },
+    { "company": "Radix Trading", "slug": "radixuniversity", "jobs": 8 },
+    { "company": "Radix Trading", "slug": "radixexperienced", "jobs": 7 },
+    { "company": "Five Rings", "slug": "fiveringsllc", "jobs": 18 },
+    { "company": "Skild AI", "slug": "skildai-careers", "jobs": 60 },
+    { "company": "DRW", "slug": "drweng", "jobs": 162 },
+    { "company": "SambaNova", "slug": "sambanovasystems", "jobs": 106 }
+  ],
+  "leverVerified": [
+    { "company": "TGS Management", "slug": "tgsmc", "jobs": 0 }
+  ],
+  "workdayVerified": [
+    { "company": "Arrowstreet Capital", "slug": "arrowstreetcapital/Arrowstreet", "jobs": 21 }
+  ],
+  "customVerified": [
+    { "company": "Susquehanna International Group", "provider": "iCIMS", "jobs": 20 },
+    { "company": "Renaissance Technologies", "provider": "official HTML careers page", "jobs": 12 },
+    { "company": "Cyera", "provider": "official careers page with Comeet links", "jobs": 15 }
+  ],
+  "ashbyVerified": [
+    { "company": "Abridge", "slug": "abridge", "jobs": 43 },
+    { "company": "Baseten", "slug": "baseten", "jobs": 64 },
+    { "company": "Cognition", "slug": "cognition", "jobs": 75 },
+    { "company": "Cohere", "slug": "cohere", "jobs": 142 },
+    { "company": "Crusoe", "slug": "crusoe", "jobs": 351 },
+    { "company": "Cursor", "slug": "cursor", "jobs": 112 },
+    { "company": "Decagon", "slug": "decagon", "jobs": 123 },
+    { "company": "ElevenLabs", "slug": "elevenlabs", "jobs": 228 },
+    { "company": "EliseAI", "slug": "eliseai", "jobs": 100 },
+    { "company": "Harvey", "slug": "harvey", "jobs": 360 },
+    { "company": "Fal", "slug": "fal-ai", "jobs": 31 },
+    { "company": "Fireworks AI", "slug": "fireworks", "jobs": 54 },
+    { "company": "Gamma", "slug": "gamma", "jobs": 33 },
+    { "company": "Genspark.ai", "slug": "genspark", "jobs": 8 },
+    { "company": "Krea", "slug": "krea", "jobs": 14 },
+    { "company": "Legora", "slug": "legora", "jobs": 279 },
+    { "company": "Listen Labs", "slug": "listenlabs", "jobs": 28 },
+    { "company": "Mercor", "slug": "mercor", "jobs": 78 },
+    { "company": "Midjourney", "slug": "midjourney", "jobs": 20 },
+    { "company": "Notion", "slug": "notion", "jobs": 119 },
+    { "company": "OpenAI", "slug": "openai", "jobs": 734 },
+    { "company": "OpenEvidence", "slug": "openevidence", "jobs": 7 },
+    { "company": "Perplexity", "slug": "perplexity", "jobs": 89 },
+    { "company": "Physical Intelligence", "slug": "physicalintelligence", "jobs": 29 },
+    { "company": "Replit", "slug": "replit", "jobs": 88 },
+    { "company": "Reflection", "slug": "reflectionai", "jobs": 61 },
+    { "company": "Rogo", "slug": "rogo", "jobs": 73 },
+    { "company": "Sierra", "slug": "sierra", "jobs": 192 },
+    { "company": "Speak", "slug": "speak", "jobs": 43 },
+    { "company": "Suno", "slug": "suno", "jobs": 64 },
+    { "company": "Surge AI", "slug": "surge-ai", "jobs": 30 },
+    { "company": "Synthesia", "slug": "synthesia", "jobs": 71 },
+    { "company": "Voleon", "slug": "voleon", "jobs": 57 }
+  ],
+  "ashbyNeedsManualNameCheck": [
+    { "company": "Applied Intuition", "slug": "applied", "reason": "Slug is generic; verify official careers page before adding." },
+    { "company": "Jump Trading", "slug": "jump", "reason": "Greenhouse already verified; Ashby slug may be unrelated." },
+    { "company": "Safe Superintelligence", "slug": "safe", "reason": "Slug is generic; verify official careers page before adding." },
+    { "company": "Thinking Machines Lab", "slug": "thinking-machines-lab", "reason": "Endpoint valid but returned 0 jobs." }
+  ]
+}
