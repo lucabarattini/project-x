@@ -554,16 +554,45 @@ export function JobDashboard({
               value={qDraft}
             />
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <div className="hidden items-center gap-1 sm:flex">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {/* One-click Newest/Oldest ordering */}
+            <div aria-label="Order by date" className="inline-flex rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1" role="group">
               <button
-                aria-label="Change sort direction"
-                className="btn btn-secondary !min-h-11 !px-3"
-                onClick={() => updateParams({ dir: params.dir === "asc" ? "desc" : "asc" })}
+                aria-pressed={params.sort === "postedAt" && params.dir === "desc"}
+                className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-bold transition-colors ${
+                  params.sort === "postedAt" && params.dir === "desc"
+                    ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
+                }`}
+                onClick={() => updateParams({ sort: "postedAt", dir: "desc" })}
                 type="button"
               >
-                <Icon name={params.dir === "asc" ? "chevron-up" : "chevron-down"} className="h-4 w-4" />
+                <Icon name="chevron-down" className="h-3.5 w-3.5" /> Newest
               </button>
+              <button
+                aria-pressed={params.sort === "postedAt" && params.dir === "asc"}
+                className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-bold transition-colors ${
+                  params.sort === "postedAt" && params.dir === "asc"
+                    ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
+                }`}
+                onClick={() => updateParams({ sort: "postedAt", dir: "asc" })}
+                type="button"
+              >
+                <Icon name="chevron-up" className="h-3.5 w-3.5" /> Oldest
+              </button>
+            </div>
+            <div className="flex items-center gap-1">
+              {params.sort !== "postedAt" ? (
+                <button
+                  aria-label="Change sort direction"
+                  className="btn btn-secondary !min-h-11 !px-3"
+                  onClick={() => updateParams({ dir: params.dir === "asc" ? "desc" : "asc" })}
+                  type="button"
+                >
+                  <Icon name={params.dir === "asc" ? "chevron-up" : "chevron-down"} className="h-4 w-4" />
+                </button>
+              ) : null}
               <label className="sr-only" htmlFor="sort-key">Sort jobs by</label>
               <select
                 className="input h-11 w-auto appearance-none pr-8 font-semibold"

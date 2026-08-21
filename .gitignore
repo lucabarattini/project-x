@@ -55,3 +55,6 @@ Connections.csv
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local docs (DeepSeek session context lives here; not public)
+/docs
