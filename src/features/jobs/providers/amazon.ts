@@ -32,6 +32,19 @@ type AmazonApiResponse = {
 type FetchAmazonJobsOptions = {
   maxJobs?: number;
   pageSize?: number;
+  /**
+   * Keyword passed to Amazon's own ATS `base_query`. Amazon's search.json
+   * behaves exactly like the careers-site search box, so role-specific
+   * searches (e.g. "financial analyst") return the same hits the ATS shows.
+   * Empty by default, which keeps the provider's recency-feed behavior.
+   */
+  query?: string;
+  /**
+   * Location keyword passed to `loc_query`. Note: Amazon's search.json
+   * currently ignores `loc_query` (verified 2026-08); location filtering is
+   * applied to `normalized_location` after the fetch instead.
+   */
+  locQuery?: string;
 };
 
 export const amazonBoards = boards as GreenhouseBoard[];
@@ -172,12 +185,18 @@ function matchesAmazonRequestedScope(job: AmazonApiJob) {
   return isCorporate || isAmazonStudentProgram(job) || isAmazonRemote(job);
 }
 
-async function fetchAmazonPage(board: GreenhouseBoard, limit: number, offset: number) {
+async function fetchAmazonPage(
+  board: GreenhouseBoard,
+  limit: number,
+  offset: number,
+  query = "",
+  locQuery = "",
+) {
   const params = new URLSearchParams({
-    base_query: "",
+    base_query: query,
     country: "USA",
     normalized_country_code: "USA",
-    loc_query: "",
+    loc_query: locQuery,
     offset: String(offset),
     result_limit: String(limit),
     sort: "recent",
@@ -201,14 +220,14 @@ async function fetchAmazonPage(board: GreenhouseBoard, limit: number, offset: nu
 }
 
 export async function fetchLatestAmazonJobs(options: FetchAmazonJobsOptions = {}) {
-  const { maxJobs = 300, pageSize = 100 } = options;
+  const { maxJobs = 300, pageSize = 100, query = "", locQuery = "" } = options;
   const board = amazonBoards[0];
   const results: GreenhouseJob[] = [];
   let totalHits = maxJobs;
 
   for (let offset = 0; offset < Math.min(maxJobs, totalHits); offset += pageSize) {
     try {
-      const data = await fetchAmazonPage(board, pageSize, offset);
+      const data = await fetchAmazonPage(board, pageSize, offset, query, locQuery);
       const jobs = data.jobs ?? [];
       totalHits = data.hits ?? totalHits;
 

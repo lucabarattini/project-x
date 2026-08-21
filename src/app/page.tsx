@@ -6,7 +6,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { CompanyLogo } from "@/features/companies/CompanyLogo";
 import { JobDashboard } from "@/features/jobs/dashboard/JobDashboard";
-import { jobBoards, getSnapshot, type ProviderDiagnostic } from "@/features/jobs/service";
+import { jobBoards, getSnapshot, getAugmentedEntries, type ProviderDiagnostic } from "@/features/jobs/service";
 import { parseSearchParams, searchJobs } from "@/features/jobs/search";
 
 export const metadata: Metadata = {
@@ -164,15 +164,17 @@ function AppSkeleton() {
 async function AppSection({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const params = parseSearchParams(searchParams);
   const snapshot = await getSnapshot();
-  const initial = searchJobs(snapshot.entries, params, 0);
+  const entries = await getAugmentedEntries(snapshot, params.q);
+  const initial = searchJobs(entries, params, 0);
 
   // The "today" window can be nearly empty at some hours. Precompute the
   // totals for the next wider windows so the client can widen automatically
-  // instead of rendering a dead feed.
+  // instead of rendering a dead feed. Computed against the augmented pool so
+  // the widening lands on a window that actually has live Amazon matches.
   const defaultDateCounts = params.date === "today"
     ? (["48h", "3d", "week"] as const).map((candidate) => ({
         date: candidate,
-        total: searchJobs(snapshot.entries, { ...params, date: candidate }, 0).total,
+        total: searchJobs(entries, { ...params, date: candidate }, 0).total,
       }))
     : [];
 

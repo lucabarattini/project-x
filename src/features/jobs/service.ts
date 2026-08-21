@@ -15,7 +15,12 @@ import {
   customCareerBoards,
   fetchLatestCustomCareerJobs,
 } from "./providers/custom-careers";
-import { buildSearchEntry, type JobSearchEntry, type SearchJob } from "./search-model";
+import {
+  buildSearchEntry,
+  mergeSearchEntries,
+  type JobSearchEntry,
+  type SearchJob,
+} from "./search-model";
 
 export type JobBoard = GreenhouseBoard;
 export type Job = SearchJob;
@@ -167,7 +172,7 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
     {
       provider: "amazon",
       timeoutMs: 30_000,
-      run: () => fetchLatestAmazonJobs({ maxJobs: options.amazonLimit ?? 300 }),
+      run: () => fetchLatestAmazonJobs({ maxJobs: options.amazonLimit ?? 600 }),
     },
     {
       provider: "google",
@@ -340,4 +345,44 @@ export async function getSnapshot(): Promise<JobSnapshot> {
 export async function fetchLatestJobs(): Promise<Job[]> {
   const snapshot = await getSnapshot();
   return snapshot.entries.map((entry) => entry.job);
+}
+
+/**
+ * Live Amazon ATS keyword results, normalized into search entries and cached
+ * for the same 300 s as the snapshot. Amazon's public search endpoint holds
+ * 10k+ U.S. jobs, so the recency-window snapshot alone can never cover
+ * role-specific searches (e.g. "financial analyst" in Seattle); querying the
+ * same `base_query` the careers site uses closes that gap.
+ */
+const getAmazonLiveEntries = unstable_cache(
+  async (query: string): Promise<JobSearchEntry[]> => {
+    try {
+      const jobs = await fetchLatestAmazonJobs({ query, maxJobs: 150 });
+      return jobs.map(buildSearchEntry);
+    } catch {
+      // Live search is best-effort; fall back to the snapshot-only feed.
+      return [];
+    }
+  },
+  ["amazon-live-query-v1"],
+  { revalidate: 300 },
+);
+
+/**
+ * Search pool for one request: the cached snapshot plus, when a keyword is
+ * present, live Amazon ATS hits for that keyword. Location/date/experience/
+ * portal filtering still happens in searchJobs, so a "financial analyst" +
+ * Seattle search now sees the same roles Amazon's own ATS shows.
+ */
+export async function getAugmentedEntries(
+  snapshot: JobSnapshot,
+  query: string,
+): Promise<JobSearchEntry[]> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return snapshot.entries;
+  }
+
+  const live = await getAmazonLiveEntries(trimmed);
+  return mergeSearchEntries(snapshot.entries, live);
 }

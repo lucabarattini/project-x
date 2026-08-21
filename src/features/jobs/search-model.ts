@@ -88,4 +88,38 @@ export function toJobListItem(entry: JobSearchEntry): JobListItem {
   };
 }
 
+/**
+ * Appends live provider results to a base set without duplicating entries
+ * already present (matched by board token + job id, or by absolute URL).
+ * Used to layer live Amazon ATS keyword hits on top of the cached snapshot.
+ */
+export function mergeSearchEntries(
+  base: JobSearchEntry[],
+  extra: JobSearchEntry[],
+): JobSearchEntry[] {
+  if (extra.length === 0) {
+    return base;
+  }
+
+  const seen = new Set<string>();
+  for (const entry of base) {
+    seen.add(`${entry.job.boardToken}:${entry.job.id}`);
+    seen.add(`url:${entry.job.absoluteUrl}`);
+  }
+
+  const additions: JobSearchEntry[] = [];
+  for (const entry of extra) {
+    const key = `${entry.job.boardToken}:${entry.job.id}`;
+    const urlKey = `url:${entry.job.absoluteUrl}`;
+    if (seen.has(key) || seen.has(urlKey)) {
+      continue;
+    }
+    seen.add(key);
+    seen.add(urlKey);
+    additions.push(entry);
+  }
+
+  return additions.length > 0 ? [...base, ...additions] : base;
+}
+
 export type { ExperienceRequirement };
