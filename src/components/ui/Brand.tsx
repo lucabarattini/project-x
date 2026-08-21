@@ -13,7 +13,7 @@ export function BrandLogo({
   return (
     <span
       aria-hidden="true"
-      className={`flex shrink-0 items-center justify-center bg-slate-950 text-white ${rounded} ${className}`}
+      className={`flex shrink-0 items-center justify-center bg-slate-950 text-white dark:bg-white dark:text-slate-950 ${rounded} ${className}`}
     >
       <svg
         aria-hidden="true"

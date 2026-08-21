@@ -13,7 +13,7 @@ import {
 import { enrichJobLinks } from "./enrichment";
 import { consolidateHiringPosts, emptyHiringPostFeed, mergeHiringPostFeed } from "./feed";
 import { normalizeHiringPosts, reclassifyHiringPost } from "./normalize";
-import type { ApifyLinkedinPost, HiringPostFeed } from "./types";
+import type { ApifyLinkedinPost, HiringPost, HiringPostFeed } from "./types";
 
 export type HiringPostPageData = {
   configured: boolean;
@@ -26,6 +26,76 @@ function reclassifyFeed(feed: HiringPostFeed, now = new Date()): HiringPostFeed 
   return {
     ...feed,
     posts: consolidateHiringPosts(feed.posts.map(reclassifyHiringPost), now),
+  };
+}
+
+/**
+ * The window the dashboard opens with. Calendar-day "today" is often nearly
+ * empty, so it widens automatically until a reasonable feed size is reached —
+ * mirroring the client-side fallback so the server can decide which posts get
+ * their full text shipped in the initial payload.
+ */
+function defaultFeedWindow(posts: HiringPost[], now = new Date()) {
+  const windows = [
+    { age: "today" as const, ms: 0, calendar: true },
+    { age: "24h" as const, ms: 24 * 60 * 60 * 1000 },
+    { age: "3d" as const, ms: 3 * 24 * 60 * 60 * 1000 },
+    { age: "7d" as const, ms: 7 * 24 * 60 * 60 * 1000 },
+  ];
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const timestamp = now.getTime();
+
+  // Mirrors the client defaults: non-technical audience, U.S.-only region,
+  // the "To contact" queue (excluded posts are archived automatically).
+  const inDefaultView = (post: HiringPost, window: (typeof windows)[number]) => {
+    if (post.roleFamily === "Technical") return false;
+    if (post.location?.status === "outside-us") return false;
+    if (post.matchStatus === "excluded") return false;
+    const posted = Date.parse(post.postedAt);
+    if (window.calendar) return posted >= startOfToday.getTime() && timestamp - posted >= -5 * 60 * 1000;
+    return timestamp - posted >= -5 * 60 * 1000 && timestamp - posted <= window.ms;
+  };
+
+  const countFor = (window: (typeof windows)[number]) =>
+    posts.filter((post) => inDefaultView(post, window)).length;
+
+  const minimumFeedSize = 6;
+  const todayCount = countFor(windows[0]);
+  const age = todayCount >= minimumFeedSize
+    ? "today"
+    : (windows.slice(1).find((window) => countFor(window) >= minimumFeedSize) ?? windows[windows.length - 1]).age;
+  const chosen = windows.find((window) => window.age === age) ?? windows[windows.length - 1];
+
+  return {
+    age,
+    visibleIds: new Set(posts.filter((post) => inDefaultView(post, chosen)).map((post) => post.id)),
+  };
+}
+
+/**
+ * Strips the heavy fields (full post text, match reasons) from every post that
+ * is not part of the default view, so the initial HTML stays small. Those posts
+ * keep their metadata for filtering and fetch their text on demand.
+ */
+function slimNonDefaultPosts(
+  feed: HiringPostFeed,
+  visibleIds: Set<string>,
+): HiringPostFeed {
+  return {
+    ...feed,
+    posts: feed.posts.map((post) => {
+      if (visibleIds.has(post.id)) {
+        return { ...post, contentOmitted: false };
+      }
+      return {
+        ...post,
+        content: "",
+        reasons: [],
+        exclusionReasons: [],
+        contentOmitted: true,
+      };
+    }),
   };
 }
 
@@ -84,11 +154,13 @@ export async function refreshHiringPosts(
 export async function getHiringPostPageData(): Promise<HiringPostPageData> {
   if (isApifyConfigured()) {
     try {
+      const feed = reclassifyFeed(await readHiringPostFeed());
+      const { visibleIds } = defaultFeedWindow(feed.posts);
       return {
         configured: true,
         source: "apify",
         error: null,
-        feed: reclassifyFeed(await readHiringPostFeed()),
+        feed: slimNonDefaultPosts(feed, visibleIds),
       };
     } catch (error) {
       return {
@@ -104,15 +176,17 @@ export async function getHiringPostPageData(): Promise<HiringPostPageData> {
   if (fixture) {
     const now = new Date();
     const posts = normalizeHiringPosts(fixture, now);
+    const merged = mergeHiringPostFeed(emptyHiringPostFeed(), posts, {
+      runId: "development-fixture",
+      rawCount: fixture.length,
+      now,
+    });
+    const { visibleIds } = defaultFeedWindow(merged.posts, now);
     return {
       configured: false,
       source: "development-fixture",
       error: null,
-      feed: mergeHiringPostFeed(emptyHiringPostFeed(), posts, {
-        runId: "development-fixture",
-        rawCount: fixture.length,
-        now,
-      }),
+      feed: slimNonDefaultPosts(merged, visibleIds),
     };
   }
 

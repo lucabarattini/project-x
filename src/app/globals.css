@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Class-based dark mode: toggled by adding `.dark` to <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #f8fafc;
   --foreground: #020617;
@@ -15,6 +18,23 @@
   --success: #047857;
   --warning: #b45309;
   --danger: #be123c;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --surface: #1e293b;
+  --line: #334155;
+  --line-strong: #475569;
+  --accent: #38bdf8;
+  --accent-hover: #0ea5e9;
+  --accent-ink: #bae6fd;
+  --accent-soft: rgba(56, 189, 248, 0.12);
+  --muted: #94a3b8;
+  --faint: #64748b;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #fb7185;
 }
 
 @theme inline {
@@ -95,7 +115,7 @@ textarea:focus-visible {
   }
 
   .surface-tint {
-    background: #f1f5f9;
+    background: color-mix(in srgb, var(--muted) 12%, var(--surface));
   }
 
   .btn {
@@ -129,22 +149,22 @@ textarea:focus-visible {
   .btn-secondary {
     border: 1px solid var(--line);
     background: var(--surface);
-    color: #334155;
+    color: var(--foreground);
   }
 
   .btn-secondary:hover {
-    border-color: #cbd5e1;
-    background: #f8fafc;
-    color: #0f172a;
+    border-color: var(--line-strong);
+    background: var(--background);
+    color: var(--foreground);
   }
 
   .btn-ghost {
-    color: #475569;
+    color: var(--muted);
   }
 
   .btn-ghost:hover {
-    background: #f1f5f9;
-    color: #0f172a;
+    background: color-mix(in srgb, var(--muted) 14%, transparent);
+    color: var(--foreground);
   }
 
   .input {
@@ -154,7 +174,7 @@ textarea:focus-visible {
     background: var(--surface);
     padding: 0 14px;
     font-size: 15px;
-    color: #0f172a;
+    color: var(--foreground);
     transition: border-color 150ms ease, box-shadow 150ms ease;
   }
 
@@ -188,13 +208,13 @@ textarea:focus-visible {
     padding: 0 12px;
     font-size: 13px;
     font-weight: 600;
-    color: #475569;
+    color: var(--muted);
     transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
   }
 
   .filter-btn:hover {
-    border-color: #94a3b8;
-    background: #f8fafc;
+    border-color: var(--faint);
+    background: var(--background);
   }
 
   .filter-btn[aria-pressed="true"] {
@@ -214,11 +234,11 @@ textarea:focus-visible {
     padding: 0 12px;
     font-size: 12px;
     font-weight: 600;
-    color: #475569;
+    color: var(--muted);
   }
 
   .chip-active {
-    border-color: #bae6fd;
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
     background: var(--accent-soft);
     color: var(--accent-ink);
   }
@@ -245,7 +265,7 @@ textarea:focus-visible {
   }
 
   .link-muted {
-    color: #475569;
+    color: var(--muted);
     transition: color 150ms ease;
   }
 

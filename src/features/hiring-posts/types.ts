@@ -52,6 +52,12 @@ export type HiringPost = {
   score: number;
   reasons: string[];
   exclusionReasons: string[];
+  /**
+   * True when the page payload carries metadata only and the full post text is
+   * fetched on demand (see /api/hiring-posts/content). Keeps the initial HTML
+   * small while the default view still renders full descriptions instantly.
+   */
+  contentOmitted?: boolean;
 };
 
 export type HiringPostFeed = {

@@ -13,14 +13,20 @@ import { loadEnvConfig } from "@next/env";
 
 type RawItem = {
   id?: string | null;
+  linkedinUrl?: string | null;
   author?: {
+    name?: string | null;
     avatar?: { url?: string | null } | null;
+    pictureUrl?: string | null;
+    profilePicture?: string | null;
+    imageUrl?: string | null;
   } | null;
 };
 
 type FeedPost = {
   id: string;
   sourcePostIds?: string[];
+  linkedinUrl?: string | null;
   author: {
     name: string;
     headline: string;
@@ -37,6 +43,23 @@ type FeedRecord = {
   lastRunId: string | null;
   [key: string]: unknown;
 };
+
+/** LinkedIn post URLs end with a per-post slug; trailing markers differ across runs. */
+function normalizePostUrl(value: string | null | undefined) {
+  return value?.trim().replace(/[?#].*$/u, "").replace(/[_-]+$/u, "") ?? "";
+}
+
+function avatarUrlFromRaw(item: RawItem) {
+  const author = item.author;
+  if (!author) return null;
+  return (
+    author.avatar?.url?.trim()
+    ?? author.pictureUrl?.trim()
+    ?? author.profilePicture?.trim()
+    ?? author.imageUrl?.trim()
+    ?? null
+  );
+}
 
 export async function backfillAuthorPhotos(): Promise<{ scannedRuns: number; patched: number }> {
   const token = process.env.APIFY_TOKEN?.trim();
@@ -63,9 +86,11 @@ export async function backfillAuthorPhotos(): Promise<{ scannedRuns: number; pat
 
   const runIds = [
     ...new Set([...(feed.ingestedRunIds ?? []), ...(feed.lastRunId ? [feed.lastRunId] : [])]),
-  ].slice(-10);
+  ].slice(-50);
 
   const avatarByPostId = new Map<string, string>();
+  const avatarByPostUrl = new Map<string, string>();
+  const avatarByName = new Map<string, string[]>();
   for (const runId of runIds) {
     try {
       const response = await fetch(
@@ -75,8 +100,20 @@ export async function backfillAuthorPhotos(): Promise<{ scannedRuns: number; pat
       if (!response.ok) continue;
       const items = await response.json() as RawItem[];
       for (const item of items) {
-        const url = item.author?.avatar?.url?.trim();
-        if (item.id && url) avatarByPostId.set(item.id, url);
+        const url = avatarUrlFromRaw(item);
+        if (!url) continue;
+        if (item.id) avatarByPostId.set(String(item.id), url);
+        const itemUrl = normalizePostUrl(item.linkedinUrl);
+        if (itemUrl) avatarByPostUrl.set(itemUrl, url);
+        const name = item.author?.name?.trim().toLowerCase();
+        if (name && name.includes(" ")) {
+          const existing = avatarByName.get(name);
+          if (existing) {
+            if (!existing.includes(url)) existing.push(url);
+          } else {
+            avatarByName.set(name, [url]);
+          }
+        }
       }
     } catch {
       // A run whose dataset already expired is skipped; the next rotation
@@ -86,9 +123,17 @@ export async function backfillAuthorPhotos(): Promise<{ scannedRuns: number; pat
 
   let patched = 0;
   for (const post of feed.posts) {
-    const postId = post.sourcePostIds?.[0] ?? post.id;
-    const url = avatarByPostId.get(postId);
-    if (url && !post.author.imageUrl) {
+    if (post.author.imageUrl) continue;
+    const url = avatarByPostId.get(post.id)
+      ?? (post.sourcePostIds ?? []).map((sourceId) => avatarByPostId.get(sourceId)).find(Boolean)
+      ?? avatarByPostUrl.get(normalizePostUrl(post.linkedinUrl))
+      ?? (() => {
+        // Name-based fallback is used only when a single scanned author
+        // matches exactly, so a shared name cannot attach a wrong photo.
+        const candidates = avatarByName.get(post.author.name.trim().toLowerCase());
+        return candidates && candidates.length === 1 ? candidates[0] : null;
+      })();
+    if (url) {
       post.author.imageUrl = url;
       patched += 1;
     }
