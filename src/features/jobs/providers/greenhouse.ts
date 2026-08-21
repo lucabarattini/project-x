@@ -109,7 +109,7 @@ async function fetchJobContent(boardToken: string, jobId: number) {
   try {
     const response = await fetch(
       `https://job-boards.greenhouse.io/embed/job_app?for=${boardToken}&token=${jobId}`,
-      { cache: "no-store", signal: AbortSignal.timeout(8_000) },
+      { cache: "no-store", signal: AbortSignal.timeout(4_000) },
     );
 
     if (!response.ok) {
@@ -122,15 +122,52 @@ async function fetchJobContent(boardToken: string, jobId: number) {
   }
 }
 
+/**
+ * Enriches job descriptions in parallel and stops when the run deadline is
+ * near, so a slow Greenhouse never eats the whole provider budget. Jobs that
+ * don't get a detail page keep their board-list description. Returns partial
+ * results instead of letting the source report "unavailable" on a slow window.
+ */
+async function fetchJobDetailsWithinDeadline(
+  jobs: GreenhouseJob[],
+  startedAt: number,
+  deadlineMs: number,
+) {
+  const detailed: GreenhouseJob[] = [];
+  let index = 0;
+
+  async function worker() {
+    while (index < jobs.length) {
+      const current = jobs[index];
+      index += 1;
+      if (Date.now() - startedAt > deadlineMs) {
+        detailed.push(current);
+        continue;
+      }
+      const contentText = await fetchJobContent(current.boardToken, Number(current.id));
+      detailed.push({ ...current, contentText });
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(12, jobs.length) }, worker));
+  return detailed;
+}
+
 export async function fetchLatestGreenhouseJobs(
   options: FetchGreenhouseJobsOptions = {},
 ) {
   const { limit, detailLimit = 120 } = options;
-  const results = await mapWithConcurrency(greenhouseBoards, 6, async (board) => {
+  // Hard wall-clock budget for the whole run, comfortably inside the caller's
+  // 30s provider timeout. The boards fan-out (41 boards) and the per-job
+  // detail enrichment both degrade to partial results past this deadline.
+  const startedAt = Date.now();
+  const runDeadlineMs = 24_000;
+
+  const results = await mapWithConcurrency(greenhouseBoards, 12, async (board) => {
     try {
       const response = await fetch(board.apiUrl, {
         next: { revalidate: 300 },
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(5_000),
       });
 
       if (!response.ok) {
@@ -163,16 +200,10 @@ export async function fetchLatestGreenhouseJobs(
 
   const latestJobs = typeof limit === "number" ? sortedJobs.slice(0, limit) : sortedJobs;
   const resolvedDetailLimit = Math.min(latestJobs.length, detailLimit);
-  const detailedJobs = await mapWithConcurrency(
+  const detailedJobs = await fetchJobDetailsWithinDeadline(
     latestJobs.slice(0, resolvedDetailLimit),
-    8,
-    async (job) => {
-      const contentText = await fetchJobContent(job.boardToken, job.id);
-      return {
-        ...job,
-        contentText,
-      };
-    },
+    startedAt,
+    runDeadlineMs,
   );
 
   return [...detailedJobs, ...latestJobs.slice(resolvedDetailLimit)];

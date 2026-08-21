@@ -262,7 +262,7 @@ async function fetchGooglePagesConcurrently(maxPages: number) {
     }
   }
 
-  await Promise.all(Array.from({ length: 4 }, worker));
+  await Promise.all(Array.from({ length: 8 }, worker));
   return pages.sort((left, right) => left.page - right.page);
 }
 

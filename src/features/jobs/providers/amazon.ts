@@ -203,7 +203,7 @@ async function fetchAmazonPage(
   });
   const url = `${board.apiUrl}&${params.toString()}`;
   const response = await fetch(url, {
-    signal: AbortSignal.timeout(8_000),
+    signal: AbortSignal.timeout(4_000),
     headers: {
       accept: "application/json",
       "accept-language": "en-US,en;q=0.9",

@@ -65,11 +65,11 @@ async function mapWithConcurrency<T, R>(
 
 export async function fetchLatestAshbyJobs(options: FetchAshbyJobsOptions = {}) {
   const { limit } = options;
-  const results = await mapWithConcurrency(ashbyBoards, 6, async (board) => {
+  const results = await mapWithConcurrency(ashbyBoards, 12, async (board) => {
     try {
       const response = await fetch(board.apiUrl, {
         cache: "no-store",
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(4_000),
         headers: {
           accept: "application/json",
           "accept-language": "en-US,en;q=0.9",
