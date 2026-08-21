@@ -118,7 +118,7 @@ test("filterJobs accepts multiple experience groups together", () => {
   const mixedExperienceJobs = [
     jobs[0],
     { ...jobs[0], id: 10, title: "Data Engineer", contentText: "Experience is not stated." },
-    { ...jobs[0], id: 11, title: "ML Engineer", contentText: "Requires 2 years. Requires 5 years." },
+    { ...jobs[0], id: 11, title: "ML Engineer", contentText: "Requires 2-4 years of Python. Requires 6+ years of backend systems." },
     { ...jobs[0], id: 12, title: "Principal Data Engineer", contentText: "Experience is not stated." },
   ];
 

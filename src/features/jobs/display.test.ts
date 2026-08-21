@@ -132,6 +132,24 @@ test("classifyTechnicalRole routes business roles to Non-Technical", () => {
   }
 });
 
+test("test and QA engineers are technical and hidden from the non-technical feed", () => {
+  for (const title of [
+    "IT Operations Analyst",
+    "Test Engineer, Amazon Devices Reverse Logistics",
+  ]) {
+    assert.notEqual(classifyTechnicalRole(title).matchedCategory, "Operations & Support");
+    assert.equal(classifyNonTechnicalRole(title), "Other", `"${title}" must be hidden from non-tech`);
+  }
+});
+
+test("accountants and analysts belong to non-tech, test engineers to technical", () => {
+  assert.equal(classifyTechnicalRole("Fixed Asset Accountant").matchedCategory, "Non-Technical");
+  assert.equal(classifyTechnicalRole("Category Analyst, Category Analytics").matchedCategory, "Non-Technical");
+  assert.equal(classifyNonTechnicalRole("Fixed Asset Accountant"), "Finance & Accounting");
+  assert.equal(classifyNonTechnicalRole("Category Analyst, Category Analytics"), "Analytics & Strategy");
+  assert.equal(classifyTechnicalRole("Test Engineer, Amazon Devices Reverse Logistics").matchedCategory, "Software Engineering");
+});
+
 test("presales and engineering-ops titles never land in the non-technical feed", () => {
   for (const title of [
     "Solutions Architect",
@@ -148,6 +166,22 @@ test("presales and engineering-ops titles never land in the non-technical feed",
     const category = classifyTechnicalRole(title).matchedCategory;
     assert.notEqual(category, "Non-Technical", `"${title}" must not be Non-Technical`);
     assert.notEqual(category, "Operations & Support", `"${title}" must not be office Operations`);
+  }
+});
+
+test("hardware and embedded engineering titles are technical, never Needs Review", () => {
+  for (const title of [
+    "Supply Chain Engineer, Amazon Prime Air, Hardware Dev Engr II - Supply Chain Engineering & Operations",
+    "Hardware Engineer, Compute",
+    "Embedded Firmware Engineer",
+    "Firmware Engineer",
+    "Silicon Design Engineer",
+    "ASIC Design Engineer",
+    "FPGA Engineer",
+    "Electrical Engineer, Robotics",
+  ]) {
+    const category = classifyTechnicalRole(title).matchedCategory;
+    assert.equal(category, "Hardware & Embedded Engineering", `"${title}" should be Hardware & Embedded Engineering`);
   }
 });
 
@@ -222,9 +256,78 @@ test("extractExperienceRequirement marks alternatives and uses the minimum path"
 });
 
 test("extractExperienceRequirement marks conflicting required numbers", () => {
-  const requirement = extractExperienceRequirement("Requires 2 years of Python. Requires 5 years of backend systems.");
+  // Only genuinely non-overlapping ranges are contradictory; plain
+  // multi-skill bullets ("2 years of Python, 5 years of backend") are
+  // cumulative and covered by the multi-skill cumulative test above.
+  const requirement = extractExperienceRequirement("Requires 2-4 years of Python. Requires 6+ years of backend systems.");
   assert.equal(requirement.status, "conflicting");
+  assert.equal(requirement.effectiveMinYears, 6);
+});
+
+test("extractExperienceRequirement ignores planning-horizon year mentions", () => {
+  // "3-5 years" here is a business planning horizon, not a candidate
+  // requirement. It must not conflict with the real qualification bullet.
+  const requirement = extractExperienceRequirement(
+    "We integrate end-to-end fulfillment analytics across both the short term (13 weeks) and long term (3-5 years) horizon. - 2+ years of analyzing and interpreting data with Redshift, Oracle, NoSQL etc.",
+  );
+  assert.equal(requirement.status, "explicit");
+  assert.equal(requirement.effectiveMinYears, 2);
+  assert.equal(
+    requirement.evidence.some((item) => item.rawText.includes("horizon")),
+    false,
+    "planning-horizon sentences must not produce evidence",
+  );
+});
+
+test("extractExperienceRequirement ignores equity vesting periods", () => {
+  const requirement = extractExperienceRequirement(
+    "Generous equity grant vested over 4 years. - 2+ years of fullstack engineering experience building and shipping production software.",
+  );
+  assert.equal(requirement.status, "explicit");
+  assert.equal(requirement.effectiveMinYears, 2);
+  assert.equal(
+    requirement.evidence.some((item) => item.rawText.includes("vested")),
+    false,
+    "vesting sentences must not produce evidence",
+  );
+});
+
+test("extractExperienceRequirement treats compound requirements as cumulative, not conflicting", () => {
+  const requirement = extractExperienceRequirement(
+    "You might thrive in this role if you: Have 3+ years of experience as a data engineer and 8+ years of any software engineering experience.",
+  );
+  assert.equal(requirement.status, "explicit");
+  assert.equal(requirement.effectiveMinYears, 8);
+});
+
+test("extractExperienceRequirement treats multi-skill bullets as cumulative, not conflicting", () => {
+  // Different skills, different years: the max is the binding constraint.
+  const requirement = extractExperienceRequirement(
+    "Requires 2 years of Python. Requires 5 years of backend systems.",
+  );
+  assert.equal(requirement.status, "explicit");
   assert.equal(requirement.effectiveMinYears, 5);
+});
+
+test("extractExperienceRequirement ignores biographical career history", () => {
+  const requirement = extractExperienceRequirement(
+    "Before founding Sierra, Clay spent 18 years at Google, where he most recently led Google Labs. - 4+ years hands-on experience building production products and systems.",
+  );
+  assert.equal(requirement.status, "explicit");
+  assert.equal(requirement.effectiveMinYears, 4);
+  assert.equal(
+    requirement.evidence.some((item) => item.rawText.includes("spent")),
+    false,
+    "biographical sentences must not produce evidence",
+  );
+});
+
+test("extractExperienceRequirement marks genuinely non-overlapping ranges as conflicting", () => {
+  const requirement = extractExperienceRequirement(
+    "Requires 2-4 years of Python. Requires 6+ years of backend systems.",
+  );
+  assert.equal(requirement.status, "conflicting");
+  assert.equal(requirement.effectiveMinYears, 6);
 });
 
 test("compactExperienceEvidence removes unrelated description copy and preserves sections", () => {
@@ -258,7 +361,7 @@ test("matchesExperienceFilter defaults to required 1–3 years and excludes seni
 
 test("principal titles are always treated as very senior", () => {
   const notStated = extractExperienceRequirement("Experience requirements are not stated.");
-  const conflicting = extractExperienceRequirement("Requires 2 years. Requires 5 years.");
+  const conflicting = extractExperienceRequirement("Requires 2-4 years of Python. Requires 6+ years of backend systems.");
 
   assert.equal(matchesExperienceFilter(notStated, "Principal Software Engineer", "not_stated"), false);
   assert.equal(matchesExperienceFilter(conflicting, "Principal Applied Scientist", "conflicting"), false);
@@ -269,5 +372,5 @@ test("principal titles are always treated as very senior", () => {
 test("matchesRoleTypeFilter uses the positive technical taxonomy", () => {
   assert.equal(matchesRoleTypeFilter("Software Engineer", "Software Engineering"), true);
   assert.equal(matchesRoleTypeFilter("Account Executive", "Software Engineering"), false);
-  assert.equal(matchesRoleTypeFilter("Unclear Analyst", "Needs Review"), true);
+  assert.equal(matchesRoleTypeFilter("Localization Specialist", "Needs Review"), true);
 });

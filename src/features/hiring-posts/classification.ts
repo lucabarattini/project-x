@@ -139,7 +139,7 @@ function classifyNonTechnicalRole(text: string): RoleFamily {
   if (/\b(?:account strategist|account manager|account executive|sales|customer solutions|business development|partnerships?|commercial)\b/iu.test(text)) return "Sales & Partnerships";
   if (/\b(?:area manager|site manager|supply chain|operations?|logistics|procurement|vendor|category manager|topology|workplace health|EHS|injury prevention|safety manager)\b/iu.test(text)) return "Operations & Supply Chain";
   if (/\b(?:product|program|project|portfolio)\s+(?:lead|manager)|\bPM-T\b/iu.test(text)) return "Product, Program & Project";
-  if (/\b(?:marketing|media|communications?|brand|go[- ]to[- ]market|GTM|campaign|growth)\b/iu.test(text)) return "Marketing & Communications";
+  if (/\b(?:marketing|media|communications?|brand(?:ing)?\b(?!-)|go[- ]to[- ]market|GTM|campaign|growth)\b/iu.test(text)) return "Marketing & Communications";
   if (/\b(?:art director|designer|design|creative|content|studio|production)\b/iu.test(text)) return "Creative & Design";
   if (/\b(?:legal|counsel|attorney|policy|compliance|risk|regulatory)\b/iu.test(text)) return "Legal, Policy & Risk";
   if (/\b(?:recruiter|recruiting|talent|human resources|HR|people|benefits?)\b/iu.test(text)) return "People & Recruiting";
@@ -151,6 +151,13 @@ export function classifyRoleFamily(title: string, content: string): RoleFamily {
   const titleText = title.trim();
   const technicalText = titleText.length > 3 ? titleText : content;
   if (technicalRolePattern.test(technicalText)) return "Technical";
+
+  // The opportunity title is often a headline rather than a role ("Building
+  // the future of Vulnerability Management for the AI era.") while the actual
+  // role signal lives in the body ("I'm hiring a Lead Vulnerability
+  // Management Engineer"). Fall through to the body before assigning a
+  // non-technical family.
+  if (technicalText !== content && technicalRolePattern.test(content)) return "Technical";
 
   const titleFamily = classifyNonTechnicalRole(titleText);
   return titleFamily === "Other" ? classifyNonTechnicalRole(content) : titleFamily;

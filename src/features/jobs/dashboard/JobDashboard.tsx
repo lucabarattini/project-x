@@ -485,7 +485,7 @@ export function JobDashboard({
   );
 
   return (
-    <section id="job-radar" className="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+    <section id="openings" className="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
       {/* Toolbar */}
       <div className="mb-4 flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">

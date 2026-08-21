@@ -69,6 +69,23 @@ type FetchJobsOptions = {
 const snapshotTtlMs = 300 * 1000;
 
 /**
+ * Hard ceiling on how stale a persisted snapshot may be before it is refused.
+ *
+ * unstable_cache is stale-while-revalidate: once past `revalidate` it keeps
+ * serving the old value and rebuilds in the background. If the process exits
+ * before that rebuild lands — routine in dev — the same stale entry is served
+ * again on the next boot, so a snapshot can outlive its TTL indefinitely. The
+ * visible symptom is a day-old snapshot rendering as "no roles published
+ * today". Past this ceiling we block on a rebuild instead of serving stale.
+ */
+const snapshotMaxStaleMs = 30 * 60 * 1000;
+
+function isStaleBeyondLimit(fetchedAt: string) {
+  const age = Date.now() - Date.parse(fetchedAt);
+  return Number.isNaN(age) || age > snapshotMaxStaleMs;
+}
+
+/**
  * Chunk size for the durable snapshot cache. Next.js refuses to persist
  * unstable_cache entries larger than 2 MB; the full snapshot (11k+ entries)
  * is ~14 MB, so we split it into small chunks that each fit comfortably.
@@ -242,7 +259,7 @@ const getSnapshotChunk = unstable_cache(
       diagnostics: snapshot.diagnostics,
     };
   },
-  ["job-snapshot-chunk-v8"],
+  ["job-snapshot-chunk-v13"],
   { revalidate: 300 },
 );
 
@@ -288,6 +305,16 @@ export async function getSnapshot(): Promise<JobSnapshot> {
 
   try {
     const first = await getSnapshotChunk("0");
+
+    // Stale-while-revalidate may hand back an entry far older than the TTL.
+    // Rebuild synchronously rather than render a stale day against a
+    // "today" filter that will then legitimately match nothing.
+    if (isStaleBeyondLimit(first.fetchedAt)) {
+      const rebuilt = await buildAndCache();
+      moduleSnapshot = rebuilt;
+      return rebuilt;
+    }
+
     const chunkCount = Math.ceil(first.jobCount / snapshotChunkSize);
     const rest = chunkCount > 1
       ? await Promise.all(

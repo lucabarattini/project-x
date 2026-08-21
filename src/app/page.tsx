@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { BrandLogo } from "@/components/ui/Brand";
 import { Icon } from "@/components/ui/Icon";
 import { CompanyLogo } from "@/features/companies/CompanyLogo";
 import { JobDashboard } from "@/features/jobs/dashboard/JobDashboard";
@@ -8,7 +9,7 @@ import { jobBoards, getSnapshot, type ProviderDiagnostic } from "@/features/jobs
 import { parseSearchParams, searchJobs } from "@/features/jobs/search";
 
 export const metadata: Metadata = {
-  title: "Job Radar — Live openings from company career pages",
+  title: "Live openings from company career pages",
   description:
     "Fresh technical and business roles pulled directly from company career pages, with auditable publication dates and experience requirements.",
 };
@@ -28,11 +29,8 @@ function SiteHeader({ portal }: { portal: "tech" | "non-tech" }) {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
-        <Link className="flex items-center gap-2.5" href="/">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 text-white">
-            <Icon name="radar" className="h-5 w-5" />
-          </span>
-          <span className="text-[15px] font-bold tracking-tight text-slate-950">Job Radar</span>
+        <Link aria-label="Home" className="flex items-center" href="/">
+          <BrandLogo />
         </Link>
         <nav aria-label="Primary" className="flex items-center gap-1 sm:gap-2">
           <div aria-label="Portal" className="mr-1 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5" role="group">
@@ -85,7 +83,7 @@ function Hero({ portal }: { portal: "tech" | "non-tech" }) {
         <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
           {portal === "non-tech"
             ? "The non-technical side of the same feed: business roles pulled directly from official ATS job boards, with publication dates and source links."
-            : "Job Radar checks hundreds of official ATS job boards and presents every role with its publication date, experience requirement and source link — no aggregator noise, no guesswork."}
+            : "Every role is pulled directly from official ATS career pages and shown with its publication date, experience requirement and source link — no aggregator noise, no guesswork."}
         </p>
       </div>
     </section>
@@ -232,7 +230,7 @@ function SiteFooter() {
     <footer className="mx-auto w-full max-w-[1400px] px-4 pb-10 sm:px-6 lg:px-10">
       <div className="flex flex-col gap-3 border-t border-slate-200 py-6 text-xs leading-5 text-slate-500 md:flex-row md:items-center md:justify-between">
         <p>
-          Job Radar is not affiliated with or endorsed by LinkedIn or any of the listed companies.
+          This site is not affiliated with or endorsed by LinkedIn or any of the listed companies.
           Data is fetched directly from official ATS career pages.
         </p>
         <div className="flex flex-wrap gap-4">
@@ -251,7 +249,7 @@ export default async function Home(props: PageProps<"/">) {
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
-      <a className="skip-link" href="#job-radar">Skip to jobs</a>
+      <a className="skip-link" href="#openings">Skip to jobs</a>
       <SiteHeader portal={portal} />
       <Hero portal={portal} />
       <Suspense fallback={<AppSkeleton />}>

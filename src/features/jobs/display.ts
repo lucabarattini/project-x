@@ -28,6 +28,7 @@ export type TechnicalTrack =
   | "Analytics & Business Intelligence"
   | "Forward Deployed"
   | "Software Engineering"
+  | "Hardware & Embedded Engineering"
   | "Data Engineering"
   | "Platform & Infrastructure"
   | "Security Engineering"
@@ -176,6 +177,29 @@ const technicalFamilies: Array<{
       /\bdeveloper\b/iu,
       /\bSWE\b/iu,
       /\bSDE\b/iu,
+      /\btest engineer\b/iu,
+      /\bQA engineer\b/iu,
+      /\bSDET\b/iu,
+      /\bquality assurance\b/iu,
+    ],
+  },
+  {
+    category: "Hardware & Embedded Engineering",
+    reason: "Matched hardware, embedded, firmware, silicon or chip engineering title.",
+    patterns: [
+      /\bhardware engineer\b/iu,
+      /\bhardware dev(?:elopment)?\b/iu,
+      /\bhardware design\b/iu,
+      /\bembedded (?:software )?engineer\b/iu,
+      /\bfirmware engineer\b/iu,
+      /\bVLSI\b/iu,
+      /\bASIC\b/iu,
+      /\bFPGA\b/iu,
+      /\bsilicon\b/iu,
+      /\bchip design\b/iu,
+      /\bPCB\b/iu,
+      /\belectrical engineer\b/iu,
+      /\bmechanical engineer\b/iu,
     ],
   },
   {
@@ -199,6 +223,7 @@ const technicalFamilies: Array<{
       /\bsite reliability engineer\b/iu,
       /\bSRE\b/iu,
       /\bnetwork engineer\b/iu,
+      /\bIT (operations|support|analyst|technician)\b/iu,
     ],
   },
   {
@@ -300,10 +325,12 @@ const technicalFamilies: Array<{
       /\bexecutive business partner\b/iu,
       /\bexecutive assistant\b/iu,
       /\bfinancial analyst\b/iu,
+      /\banalyst\b/iu,
       /\bfinance\b/iu,
       /\btreasury\b/iu,
       /\bcredit risk\b/iu,
       /\baccounting\b/iu,
+      /\baccountant\b/iu,
       /\bcounsel\b/iu,
       /\blegal\b/iu,
       /\battorney\b/iu,
@@ -377,11 +404,35 @@ function sentenceCaseSections(text: string) {
   ];
 }
 
+/**
+ * Sentences that mention "N years" as a planning horizon, roadmap or forecast
+ * rather than a candidate experience requirement. E.g. Amazon's "we integrate
+ * analytics across the long term (3-5 years) horizon" would otherwise surface
+ * as conflicting experience evidence against the real qualification bullet.
+ */
+const planningHorizonPattern =
+  /\b(horizon|roadmap|forecast|outlook|timeline|planning horizon)\b|\b(long|short|mid)[-\s]?term\b|(?:over the next|in the next|next|coming)\s+\d{1,2}\s+years?/iu;
+
+/**
+ * Compensation- or equity-related time periods ("equity grant vested over 4
+ * years") that mention years without being an experience requirement.
+ */
+const compensationPeriodPattern = /\b(?:vested|vesting)\b|\bequity grant\b|\bstock option\b/iu;
+
+/**
+ * Biographical career history ("Clay spent 18 years at Google before founding
+ * Sierra") that mentions years without setting a candidate requirement.
+ */
+const biographyPattern = /\bspent\s+\d{1,2}\s*years?\b/iu;
+
 function splitEvidenceSentences(text: string) {
   return text
     .split(/(?<=[.!?])\s+|(?:\s+-\s+)/u)
     .map(normalizeWhitespace)
-    .filter((sentence) => /\byears?\b/iu.test(sentence));
+    .filter((sentence) => /\byears?\b/iu.test(sentence))
+    .filter((sentence) => !planningHorizonPattern.test(sentence))
+    .filter((sentence) => !compensationPeriodPattern.test(sentence))
+    .filter((sentence) => !biographyPattern.test(sentence));
 }
 
 function extractEvidenceFromSentence(
@@ -425,6 +476,15 @@ function extractEvidenceFromSentence(
     return evidence.filter((item) => item.minYears === minimum);
   }
 
+  // A single sentence with several different minimums ("3+ years as a data
+  // engineer and 8+ years of software engineering") is a cumulative
+  // requirement, not a contradiction: the binding constraint is the max.
+  const uniqueMins = new Set(evidence.map((item) => item.minYears));
+  if (evidence.length > 1 && uniqueMins.size > 1) {
+    const maximum = Math.max(...evidence.map((item) => item.minYears));
+    return evidence.filter((item) => item.minYears === maximum);
+  }
+
   return evidence;
 }
 
@@ -451,11 +511,19 @@ export function extractExperienceRequirement(text: string): ExperienceRequiremen
   const maxValues = minEvidence.map((item) => item.maxYears).filter((value): value is number => value !== null);
   const uniqueMins = new Set(requiredEvidence.map((item) => item.minYears));
 
+  // Different minimums usually describe cumulative requirements for different
+  // skills ("6+ years in strategy, 3+ years in pricing"); the max binds. Only
+  // flag "conflicting" when a stated range cannot overlap the effective
+  // minimum (e.g. "2-4 years" next to "6+ years") — a genuine contradiction.
+  const nonOverlappingRange = requiredEvidence.some(
+    (item) => item.maxYears !== null && item.maxYears < effectiveMinYears,
+  );
+
   return {
     effectiveMinYears,
     effectiveMaxYears: maxValues.length > 0 ? Math.min(...maxValues) : null,
     evidence,
-    status: uniqueMins.size > 1 && !requiredEvidence.some((item) => item.isAlternative)
+    status: uniqueMins.size > 1 && nonOverlappingRange && !requiredEvidence.some((item) => item.isAlternative)
       ? "conflicting"
       : "explicit",
   };
@@ -744,6 +812,7 @@ const nonTechnicalFamilyPatterns: Array<{
       /\bresearch analyst\b/iu,
       /\bdata analyst\b/iu,
       /\bplanning analyst\b/iu,
+      /\banalyst\b/iu,
     ],
   },
 ];
@@ -765,6 +834,11 @@ const excludedNonTechnicalPatterns = [
   /\bcompliance\b/iu,
   /\bpolicy\b/iu,
   /\barchitect\b/iu,
+  /\bIT (operations|support|analyst|technician)\b/iu,
+  /\btest engineer\b/iu,
+  /\bQA engineer\b/iu,
+  /\bSDET\b/iu,
+  /\bquality assurance\b/iu,
 ];
 
 /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { CompanyLogo } from "@/features/companies/CompanyLogo";
 import { FaceAvatar } from "@/features/network/FaceAvatar";
@@ -18,17 +18,57 @@ type Props = {
   updatedAt: string | null;
 };
 
-type AgeFilter = "24h" | "3d" | "7d";
-type InboxView = "queue" | "review" | "contacted" | "hidden";
+type AgeFilter = "today" | "24h" | "3d" | "7d";
+type InboxView = "queue" | "contacted" | "hidden";
 type SignalAudience = "all" | "technical" | "non-technical";
+type RegionFilter = "us" | "all";
 type LeadDecision = "contacted" | "hidden";
 type LeadDecisions = Record<string, LeadDecision>;
 
-const ageMilliseconds: Record<AgeFilter, number> = {
+const ageMilliseconds: Record<Exclude<AgeFilter, "today">, number> = {
   "24h": 24 * 60 * 60 * 1000,
   "3d": 3 * 24 * 60 * 60 * 1000,
   "7d": 7 * 24 * 60 * 60 * 1000,
 };
+
+/**
+ * Emoji-labelled location filters, matched case-insensitively against the
+ * post's location label. Labels are free-form (city, region, or "Location not
+ * verified"), so each filter matches several spellings and nearby cities.
+ */
+const locationFilters: Array<{ value: string; emoji: string; pattern: RegExp }> = [
+  { value: "New York", emoji: "🗽", pattern: /new york|\bnyc\b|\bny\b/iu },
+  { value: "Seattle", emoji: "☕", pattern: /seattle/iu },
+  { value: "San Francisco", emoji: "🌉", pattern: /san francisco|bay area|mountain view|sunnyvale|palo alto|san jose/iu },
+  { value: "Austin", emoji: "🏙️", pattern: /austin/iu },
+  { value: "Boston", emoji: "🍁", pattern: /boston/iu },
+  { value: "Miami", emoji: "🌴", pattern: /miami/iu },
+  { value: "Chicago", emoji: "🏙️", pattern: /chicago/iu },
+  { value: "Washington", emoji: "🏛️", pattern: /washington|arlington/iu },
+  { value: "London", emoji: "🇬🇧", pattern: /london|united kingdom/iu },
+  { value: "Berlin", emoji: "🇩🇪", pattern: /berlin/iu },
+  { value: "Paris", emoji: "🇫🇷", pattern: /paris/iu },
+  { value: "Amsterdam", emoji: "🇳🇱", pattern: /amsterdam/iu },
+  { value: "Zurich", emoji: "🇨🇭", pattern: /zurich|zürich/iu },
+  { value: "Dublin", emoji: "🇮🇪", pattern: /dublin/iu },
+  { value: "Madrid", emoji: "🇪🇸", pattern: /madrid/iu },
+  { value: "Barcelona", emoji: "🇪🇸", pattern: /barcelona/iu },
+  { value: "Stockholm", emoji: "🇸🇪", pattern: /stockholm/iu },
+  { value: "Munich", emoji: "🇩🇪", pattern: /munich|münchen/iu },
+  { value: "Milan", emoji: "🇮🇹", pattern: /milan|milano/iu },
+  { value: "Warsaw", emoji: "🇵🇱", pattern: /warsaw/iu },
+  { value: "Remote", emoji: "🏠", pattern: /remote/iu },
+  { value: "United States", emoji: "🇺🇸", pattern: /united states|\busa\b|\bu\.s\./iu },
+  { value: "UK", emoji: "🇬🇧", pattern: /united kingdom|\buk\b/iu },
+  { value: "Europe", emoji: "🌍", pattern: /europe|emea/iu },
+  { value: "Canada", emoji: "🇨🇦", pattern: /canada|toronto|ontario/iu },
+  { value: "India", emoji: "🇮🇳", pattern: /india|bengaluru|bangalore|hyderabad|chennai|gurgaon|noida|mumbai|delhi/iu },
+  { value: "Singapore", emoji: "🇸🇬", pattern: /singapore/iu },
+  { value: "Japan", emoji: "🇯🇵", pattern: /japan|tokyo/iu },
+  { value: "Australia", emoji: "🇦🇺", pattern: /australia|sydney|melbourne/iu },
+  { value: "Brazil", emoji: "🇧🇷", pattern: /brazil|são paulo|sao paulo/iu },
+  { value: "Israel", emoji: "🇮🇱", pattern: /israel/iu },
+];
 
 const contactLabels: Record<ContactType, string> = {
   "direct-team": "Hiring team",
@@ -39,10 +79,6 @@ const contactLabels: Record<ContactType, string> = {
 const decisionStorageKey = "job-radar:hiring-signal-decisions:v1";
 const decisionEventName = "job-radar:hiring-signal-decisions";
 const emptyDecisionSnapshot = "{}";
-
-const stopWords = new Set([
-  "and", "for", "the", "with", "our", "your", "you", "are", "is", "a", "an", "of", "to", "in", "on", "at", "role", "roles", "team", "new", "open", "opening", "senior", "lead", "sr", "ii", "iii",
-]);
 
 function subscribeToDecisions(callback: () => void) {
   window.addEventListener("storage", callback);
@@ -129,7 +165,6 @@ function firstName(value: string) {
 function EmptyState({ view, audience }: { view: InboxView; audience: SignalAudience }) {
   const copy: Record<InboxView, [string, string]> = {
     queue: ["Inbox cleared", "There are no unhandled high-confidence leads in this view."],
-    review: ["Nothing useful to verify", "Only strong hiring signals with missing role or location details appear here."],
     contacted: ["No contacted leads yet", "After you send a message, mark the lead contacted and it will appear here."],
     hidden: ["No hidden leads", "Leads you intentionally hide can be restored from here."],
   };
@@ -182,16 +217,6 @@ function AuthorPhoto({
   );
 }
 
-type MatchedJob = {
-  id: string;
-  title: string;
-  company: string;
-  location: string;
-  postedAt: string | null;
-  absoluteUrl: string;
-  badgeLabel: string;
-};
-
 export function HiringPostDashboard({
   configured,
   error,
@@ -204,14 +229,13 @@ export function HiringPostDashboard({
   updatedAt,
 }: Props) {
   const [view, setView] = useState<InboxView>("queue");
-  const [audience, setAudience] = useState<SignalAudience>("all");
+  const [audience, setAudience] = useState<SignalAudience>("non-technical");
   const [company, setCompany] = useState("all");
   const [contactType, setContactType] = useState<ContactType | "all">("all");
-  const [age, setAge] = useState<AgeFilter>("7d");
+  const [age, setAge] = useState<AgeFilter>("today");
+  const [region, setRegion] = useState<RegionFilter>("us");
+  const [locations, setLocations] = useState<string[]>([]);
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [matchedJobs, setMatchedJobs] = useState<MatchedJob[] | null>(null);
-  const [matchedLoading, setMatchedLoading] = useState(false);
   const { decisions, setDecision } = useLeadDecisions();
   const renderedAtTimestamp = Date.parse(renderedAt);
 
@@ -223,8 +247,7 @@ export function HiringPostDashboard({
     const byAudience = (post: HiringPost) =>
       audience === "all" || (audience === "technical") === (post.roleFamily === "Technical");
     return {
-      queue: posts.filter((post) => byAudience(post) && post.matchStatus === "match" && !decisions[post.id]).length,
-      review: posts.filter((post) => byAudience(post) && post.matchStatus === "review" && !decisions[post.id]).length,
+      queue: posts.filter((post) => byAudience(post) && post.matchStatus !== "excluded" && !decisions[post.id]).length,
       contacted: posts.filter((post) => byAudience(post) && decisions[post.id] === "contacted").length,
       hidden: posts.filter((post) => byAudience(post) && decisions[post.id] === "hidden").length,
       direct: posts.filter((post) => post.matchStatus === "match" && post.contactType === "direct-team").length,
@@ -236,17 +259,26 @@ export function HiringPostDashboard({
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
+    const selectedLocations = locationFilters.filter((item) => locations.includes(item.value));
+    const startOfToday = new Date(renderedAtTimestamp);
+    startOfToday.setHours(0, 0, 0, 0);
+    const todayStart = startOfToday.getTime();
+
     return posts.filter((post) => {
       const decision = decisions[post.id];
       const viewMatches = view === "queue"
-        ? post.matchStatus === "match" && !decision
-        : view === "review"
-          ? post.matchStatus === "review" && !decision
-          : decision === view;
+        ? post.matchStatus !== "excluded" && !decision
+        : decision === view;
       const audienceMatches = audience === "all"
         || (audience === "technical") === (post.roleFamily === "Technical");
-      const elapsed = renderedAtTimestamp - Date.parse(post.postedAt);
-      const ageMatches = elapsed >= -5 * 60 * 1000 && elapsed <= ageMilliseconds[age];
+      const regionMatches = region === "all" || post.location.status !== "outside-us";
+      const postedTimestamp = Date.parse(post.postedAt);
+      const elapsed = renderedAtTimestamp - postedTimestamp;
+      const ageMatches = age === "today"
+        ? postedTimestamp >= todayStart && elapsed >= -5 * 60 * 1000
+        : elapsed >= -5 * 60 * 1000 && elapsed <= ageMilliseconds[age];
+      const locationMatches = selectedLocations.length === 0
+        || selectedLocations.some((item) => item.pattern.test(post.location.label));
       const textMatches = !normalizedQuery || [
         post.opportunityTitle,
         post.author.name,
@@ -259,64 +291,29 @@ export function HiringPostDashboard({
 
       return viewMatches
         && audienceMatches
+        && regionMatches
         && (company === "all" || post.company === company)
         && (contactType === "all" || post.contactType === contactType)
         && ageMatches
+        && locationMatches
         && textMatches;
     });
-  }, [age, audience, company, contactType, decisions, posts, query, renderedAtTimestamp, view]);
+  }, [age, audience, company, contactType, decisions, locations, posts, query, region, renderedAtTimestamp, view]);
 
-  // Look up the selection in the full post list (not the filtered view) so
-  // the panel stays open after an action moves the post out of the current view.
-  const selectedPost = selectedId ? posts.find((post) => post.id === selectedId) ?? null : null;
-
-  useEffect(() => {
-    const postId = selectedPost?.id;
-    const frame = requestAnimationFrame(() => {
-      setMatchedJobs(null);
-      setMatchedLoading(true);
-    });
-    if (!postId) return () => cancelAnimationFrame(frame);
-    let cancelled = false;
-    const keywords = (selectedPost.opportunityTitle ?? "")
-      .toLowerCase()
-      .split(/[^a-z0-9]+/u)
-      .filter((word) => word.length > 2 && !stopWords.has(word))
-      .slice(0, 4)
-      .join(" ");
-    const params = new URLSearchParams({
-      company: selectedPost.company,
-      date: "all",
-      tracks: "all",
-      exp: "all",
-      country: "all",
-      limit: "3",
-      ...(keywords ? { q: keywords } : {}),
-    });
-    fetch(`/api/jobs/search?${params.toString()}`)
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
-      .then((data: { jobs: MatchedJob[] }) => {
-        if (!cancelled) setMatchedJobs(data.jobs ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setMatchedJobs([]);
-      })
-      .finally(() => {
-        if (!cancelled) setMatchedLoading(false);
-      });
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(frame);
-    };
-  }, [selectedPost?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const filtersAreActive = audience !== "all" || company !== "all" || contactType !== "all" || age !== "7d" || query !== "";
-  const viewOptions: Array<{ key: InboxView; label: string; count: number; hint: string; icon: "radar" | "search" | "check" | "x" }> = [
+  const filtersAreActive = audience !== "non-technical" || company !== "all" || contactType !== "all" || age !== "today" || region !== "us" || locations.length > 0 || query !== "";
+  const viewOptions: Array<{ key: InboxView; label: string; count: number; hint: string; icon: "radar" | "check" | "x" }> = [
     { key: "queue", label: "To contact", count: counts.queue, hint: `${counts.direct} hiring team · ${counts.recruiters} recruiters`, icon: "radar" },
-    { key: "review", label: "Verify manually", count: counts.review, hint: "Strong signal, missing detail", icon: "search" },
     { key: "contacted", label: "Contacted", count: counts.contacted, hint: "Saved on this browser", icon: "check" },
     { key: "hidden", label: "Hidden", count: counts.hidden, hint: "Restorable leads", icon: "x" },
   ];
+
+  function toggleLocation(value: string) {
+    setLocations((current) =>
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value],
+    );
+  }
 
   function markContacted(post: HiringPost) {
     setDecision(post.id, decisions[post.id] === "contacted" ? null : "contacted");
@@ -324,6 +321,16 @@ export function HiringPostDashboard({
 
   function markHidden(post: HiringPost) {
     setDecision(post.id, decisions[post.id] === "hidden" ? null : "hidden");
+  }
+
+  function clearFilters() {
+    setAudience("non-technical");
+    setCompany("all");
+    setContactType("all");
+    setAge("today");
+    setRegion("us");
+    setLocations([]);
+    setQuery("");
   }
 
   return (
@@ -379,7 +386,7 @@ export function HiringPostDashboard({
             aria-pressed={view === option.key}
             className={`min-h-24 border-b border-slate-200 p-4 text-left transition-colors duration-200 sm:border-r lg:border-b-0 ${view === option.key ? "bg-sky-700 text-white" : "bg-white text-slate-950 hover:bg-slate-50"}`}
             key={option.key}
-            onClick={() => { setView(option.key); setSelectedId(null); }}
+            onClick={() => setView(option.key)}
             type="button"
           >
             <span className="flex items-start justify-between gap-3">
@@ -395,7 +402,7 @@ export function HiringPostDashboard({
       </section>
 
       <section aria-label="Filter outreach leads" className="card mt-5 p-4 sm:p-5">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_repeat(3,minmax(150px,auto))]">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.2fr)_repeat(4,minmax(140px,0.8fr))]">
           <label className="block">
             <span className="mb-1.5 block text-xs font-bold text-slate-700">Search leads</span>
             <span className="relative block">
@@ -426,19 +433,63 @@ export function HiringPostDashboard({
             </select>
           </label>
           <label className="block">
+            <span className="mb-1.5 block text-xs font-bold text-slate-700">Region</span>
+            <select className="input h-11 font-semibold" onChange={(event) => setRegion(event.target.value as RegionFilter)} value={region}>
+              <option value="us">🇺🇸 U.S. only</option>
+              <option value="all">🌍 All regions</option>
+            </select>
+          </label>
+          <label className="block">
             <span className="mb-1.5 block text-xs font-bold text-slate-700">Published</span>
             <select className="input h-11 font-semibold" onChange={(event) => setAge(event.target.value as AgeFilter)} value={age}>
+              <option value="today">Today</option>
               <option value="24h">Last 24 hours</option>
               <option value="3d">Last 3 days</option>
               <option value="7d">Last 7 days</option>
             </select>
           </label>
         </div>
+
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-bold text-slate-700">
+              <Icon name="map-pin" className="mr-1 inline h-3.5 w-3.5 text-slate-400" />
+              Location
+            </p>
+            {locations.length > 0 ? (
+              <button className="min-h-8 text-xs font-bold text-sky-800 underline decoration-sky-300 underline-offset-4" onClick={() => setLocations([])} type="button">
+                Clear locations
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {locationFilters.map((item) => {
+              const active = locations.includes(item.value);
+              return (
+                <button
+                  aria-pressed={active}
+                  className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-bold transition-colors ${
+                    active
+                      ? "border-slate-950 bg-slate-950 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                  key={item.value}
+                  onClick={() => toggleLocation(item.value)}
+                  type="button"
+                >
+                  <span aria-hidden="true">{item.emoji}</span>
+                  {item.value}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 text-xs text-slate-600" aria-live="polite">
           <p><span className="font-bold text-slate-900">{filtered.length}</span> visible · New batch every {scanCadenceHours}h · All {trackedCompanyCount} companies every {companyCycleHours}h</p>
           <div className="flex items-center gap-3">
             {filtersAreActive ? (
-              <button className="min-h-11 font-bold text-sky-800 underline decoration-sky-300 underline-offset-4" onClick={() => { setAudience("all"); setCompany("all"); setContactType("all"); setAge("7d"); setQuery(""); }} type="button">Clear filters</button>
+              <button className="min-h-11 font-bold text-sky-800 underline decoration-sky-300 underline-offset-4" onClick={clearFilters} type="button">Clear filters</button>
             ) : null}
             <p className="inline-flex items-center gap-1.5">
               <span className="relative flex h-2 w-2">
@@ -454,111 +505,24 @@ export function HiringPostDashboard({
       {filtered.length === 0 ? (
         <div className="mt-5"><EmptyState view={view} audience={audience} /></div>
       ) : (
-        <section className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(380px,480px)]" aria-label={`${viewOptions.find((option) => option.key === view)?.label ?? "Outreach"} leads`}>
-          {/* Compact table */}
-          <div className="card overflow-hidden">
-            <div className="hidden grid-cols-[minmax(210px,1fr)_minmax(170px,0.9fr)_minmax(100px,0.55fr)_minmax(100px,0.55fr)_110px_80px_96px] items-center gap-4 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.13em] text-slate-500 xl:grid">
-              <span>Author</span>
-              <span>Post / Role</span>
-              <span>Company</span>
-              <span>Location</span>
-              <span>Quality</span>
-              <span className="text-right">Posted</span>
-              <span className="text-right">Actions</span>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {filtered.map((post) => {
-                const decision = decisions[post.id];
-                const selected = selectedId === post.id;
-                const quality = qualityBadge(post);
-                const isTechnical = post.roleFamily === "Technical";
-                return (
-                  <div
-                    className={`relative transition-colors duration-150 ${selected ? "bg-sky-50/70" : "hover:bg-slate-50"}`}
-                    key={post.id}
-                  >
-                    <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-0.5 bg-sky-600 transition-opacity ${selected ? "opacity-100" : "opacity-0"}`} />
-                    <button
-                      aria-pressed={selected}
-                      className="grid w-full grid-cols-1 items-center gap-x-4 gap-y-2 px-4 py-3.5 text-left xl:grid-cols-[minmax(210px,1fr)_minmax(170px,0.9fr)_minmax(100px,0.55fr)_minmax(100px,0.55fr)_110px_80px_96px]"
-                      onClick={() => setSelectedId(selected ? null : post.id)}
-                      type="button"
-                    >
-                      <span className="flex min-w-0 items-center gap-3">
-                        <AuthorPhoto name={post.author.name} imageUrl={post.author.imageUrl} className="h-10 w-10" />
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-1.5">
-                            <span className="truncate text-[13px] font-bold text-slate-950">{post.author.name}</span>
-                            {isTechnical ? (
-                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-800">
-                                <Icon name="code" className="h-2.5 w-2.5" /> Tech
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="mt-0.5 block truncate text-[11px] text-slate-500">{post.author.headline || post.roleFamily}</span>
-                        </span>
-                      </span>
-                      <span className="min-w-0">
-                        <span className="flex items-center gap-1.5">
-                          <span className="truncate text-[13px] font-semibold text-slate-900">{post.opportunityTitle}</span>
-                          <span className={`hidden shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-bold sm:inline ${contactBadgeClass(post.contactType)}`}>{contactLabels[post.contactType]}</span>
-                        </span>
-                        <span className="mt-0.5 block truncate text-[11px] text-slate-500">{post.content.slice(0, 170) || "Link-only post"}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-800">
-                        <CompanyLogo company={post.company} size="sm" decorative className="!h-4 !w-4 !rounded !text-[8px]" />
-                        <span className="truncate">{post.company}</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-[12px] text-slate-600">
-                        <Icon name="map-pin" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                        <span className="truncate">{post.location.label}</span>
-                      </span>
-                      <span>
-                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold ${quality.className}`}>
-                          <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${quality.dot}`} />
-                          {quality.label}
-                        </span>
-                      </span>
-                      <span className="text-right text-[11px] font-semibold text-slate-500">
-                        {relativeAge(post.postedAt, renderedAtTimestamp).replace(" ago", "")}
-                      </span>
-                    </button>
-                    <div className="absolute right-2 top-1/2 hidden -translate-y-1/2 items-center gap-1 xl:flex">
-                      <QuickActions post={post} decision={decision} onContacted={() => markContacted(post)} onHidden={() => markHidden(post)} compact />
-                    </div>
-                    <div className="flex items-center justify-end gap-1 border-t border-slate-100 px-4 py-2 xl:hidden">
-                      <QuickActions post={post} decision={decision} onContacted={() => markContacted(post)} onHidden={() => markHidden(post)} compact />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Detail side panel */}
-          <aside className="card min-w-0 overflow-hidden xl:sticky xl:top-24" aria-live="polite">
-            {selectedPost ? (
-              <DetailPanel
-                post={selectedPost}
-                decision={decisions[selectedPost.id]}
-                matchedJobs={matchedJobs}
-                matchedLoading={matchedLoading}
+        <section className="mt-5 space-y-4" aria-label={`${viewOptions.find((option) => option.key === view)?.label ?? "Outreach"} leads`}>
+          {filtered.map((post) => {
+            const decision = decisions[post.id];
+            const quality = qualityBadge(post);
+            const isTechnical = post.roleFamily === "Technical";
+            return (
+              <SignalCard
+                decision={decision}
+                isTechnical={isTechnical}
+                key={post.id}
+                onContacted={() => markContacted(post)}
+                onHidden={() => markHidden(post)}
+                post={post}
+                quality={quality}
                 renderedAtTimestamp={renderedAtTimestamp}
-                onContacted={() => markContacted(selectedPost)}
-                onHidden={() => markHidden(selectedPost)}
-                onClose={() => setSelectedId(null)}
               />
-            ) : (
-              <div className="flex min-h-[300px] flex-col items-center justify-center gap-3 p-8 text-center">
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                  <Icon name="eye" className="h-6 w-6" />
-                </span>
-                <p className="max-w-[240px] text-sm leading-6 text-slate-500">
-                  Select a lead to read the full post, see the author, and find its matched job opening.
-                </p>
-              </div>
-            )}
-          </aside>
+            );
+          })}
         </section>
       )}
 
@@ -569,85 +533,32 @@ export function HiringPostDashboard({
   );
 }
 
-function QuickActions({
+function SignalCard({
   post,
   decision,
-  onContacted,
-  onHidden,
-  compact = false,
-}: {
-  post: HiringPost;
-  decision: LeadDecision | undefined;
-  onContacted: () => void;
-  onHidden: () => void;
-  compact?: boolean;
-}) {
-  const profileUrl = post.author.linkedinUrl ?? post.linkedinUrl;
-  return (
-    <span className={compact ? "inline-flex items-center gap-1" : "mt-4 grid gap-2"}>
-      <a
-        aria-label={`Open ${post.author.name}'s profile`}
-        className={compact ? "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:border-sky-300 hover:text-sky-800" : "btn btn-secondary w-full"}
-        href={profileUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        <Icon name="external-link" className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
-      </a>
-      <button
-        aria-pressed={decision === "contacted"}
-        className={compact
-          ? `inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${decision === "contacted" ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-500 hover:border-sky-300 hover:text-sky-800"}`
-          : `btn w-full ${decision === "contacted" ? "btn-primary" : "btn-secondary"}`}
-        onClick={onContacted}
-        title={decision === "contacted" ? "Mark as not contacted" : "Mark as contacted"}
-        type="button"
-      >
-        <Icon name="check" className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
-        {compact ? null : decision === "contacted" ? "Contacted" : "Mark contacted"}
-      </button>
-      <button
-        aria-pressed={decision === "hidden"}
-        className={compact
-          ? `inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${decision === "hidden" ? "border-slate-400 bg-slate-100 text-slate-700" : "border-slate-200 bg-white text-slate-500 hover:border-rose-300 hover:text-rose-700"}`
-          : `btn w-full ${decision === "hidden" ? "btn-secondary" : "btn-ghost"}`}
-        onClick={onHidden}
-        title={decision === "hidden" ? "Restore lead" : "Hide this lead"}
-        type="button"
-      >
-        <Icon name="x" className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
-        {compact ? null : decision === "hidden" ? "Restore" : "Hide"}
-      </button>
-    </span>
-  );
-}
-
-function DetailPanel({
-  post,
-  decision,
-  matchedJobs,
-  matchedLoading,
+  isTechnical,
+  quality,
   renderedAtTimestamp,
   onContacted,
   onHidden,
-  onClose,
 }: {
   post: HiringPost;
   decision: LeadDecision | undefined;
-  matchedJobs: MatchedJob[] | null;
-  matchedLoading: boolean;
+  isTechnical: boolean;
+  quality: { label: string; className: string; dot: string };
   renderedAtTimestamp: number;
   onContacted: () => void;
   onHidden: () => void;
-  onClose: () => void;
 }) {
-  const profileUrl = post.author.linkedinUrl ?? post.linkedinUrl;
-  const why = post.matchStatus === "review"
-    ? [...post.reasons, ...post.exclusionReasons]
-    : post.reasons;
-  const quality = qualityBadge(post);
-  const isTechnical = post.roleFamily === "Technical";
   const [copied, setCopied] = useState(false);
+  const profileUrl = post.author.linkedinUrl ?? post.linkedinUrl;
+  const postedLabel = relativeAge(post.postedAt, renderedAtTimestamp);
+  const postedAbsolute = new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(post.postedAt));
 
   const postLinks = useMemo(() => {
     const urls = (post.content ?? "").match(/https?:\/\/[^\s<>"']+/giu) ?? [];
@@ -675,151 +586,150 @@ function DetailPanel({
     }
   }
 
+  const why = post.matchStatus === "review"
+    ? [...post.reasons, ...post.exclusionReasons]
+    : post.reasons;
+
   return (
-    <div className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${contactBadgeClass(post.contactType)}`}>{contactLabels[post.contactType]}</span>
-          <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${quality.className}`}>
-            <span aria-hidden="true" className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${quality.dot}`} />
-            {quality.label}
-          </span>
-          {isTechnical ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-800">
-              <Icon name="code" className="h-3 w-3" /> Technical
-            </span>
+    <article className="card overflow-hidden">
+      <div className="p-5 sm:p-6">
+        {/* Author row: name + post time immediately next to it */}
+        <div className="flex items-start gap-3.5">
+          <AuthorPhoto name={post.author.name} imageUrl={post.author.imageUrl} className="h-12 w-12" />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <p className="text-[15px] font-bold leading-6 text-slate-950">{post.author.name}</p>
+              <a
+                aria-label={`View the LinkedIn post published ${postedAbsolute}`}
+                className="inline-flex items-center gap-1 text-[13px] font-bold leading-6 text-sky-700 underline-offset-2 transition-colors hover:underline"
+                href={post.linkedinUrl}
+                rel="noreferrer"
+                target="_blank"
+                title={`Published ${postedAbsolute}`}
+              >
+                · {postedLabel}
+                <Icon name="external-link" className="h-3 w-3 shrink-0" />
+              </a>
+              {isTechnical ? (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-800">
+                  <Icon name="code" className="h-2.5 w-2.5" /> Tech
+                </span>
+              ) : null}
+              <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${contactBadgeClass(post.contactType)}`}>
+                {contactLabels[post.contactType]}
+              </span>
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold ${quality.className}`}>
+                <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${quality.dot}`} />
+                {quality.label}
+              </span>
+              {decision === "contacted" ? (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-800">
+                  <Icon name="check" className="h-2.5 w-2.5" /> Contacted
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-0.5 truncate text-xs leading-5 text-slate-500">
+              {post.author.headline || post.roleFamily}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] font-semibold text-slate-700">
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <CompanyLogo company={post.company} size="sm" decorative className="!h-4 !w-4 !rounded !text-[8px]" />
+                <span className="truncate">{post.company}</span>
+              </span>
+              <span className="inline-flex min-w-0 items-center gap-1 text-slate-600">
+                <Icon name="map-pin" className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <span className="truncate">{post.location.label}</span>
+              </span>
+              {post.opportunityTitle ? (
+                <span className="inline-flex min-w-0 items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-800">
+                  <Icon name="briefcase" className="h-2.5 w-2.5 shrink-0" />
+                  <span className="truncate">{post.opportunityTitle}</span>
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {/* Full post text — readable, no click required */}
+        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 border-l-4 border-l-sky-300 bg-white">
+          <p className="whitespace-pre-line break-words px-4 py-4 text-[15px] leading-7 text-slate-800 sm:px-5">
+            {post.content || "Link-only post. The role details were recovered from its LinkedIn job card."}
+          </p>
+          {postLinks.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:px-5">
+              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Links in post</span>
+              {postLinks.map((url) => (
+                <a
+                  className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-sky-700 transition-colors hover:border-sky-300 hover:bg-sky-50"
+                  href={url}
+                  key={url}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <Icon name="external-link" className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{linkLabel(url)}</span>
+                </a>
+              ))}
+            </div>
           ) : null}
         </div>
-        <div className="flex items-center gap-1">
+
+        {/* Actions */}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <a className="btn btn-primary !min-h-10 !px-4 !text-sm" href={profileUrl} rel="noreferrer" target="_blank">
+            Open profile to message <Icon name="external-link" className="h-4 w-4" />
+          </a>
+          {post.opportunityUrl ? (
+            <a className="btn btn-secondary !min-h-10 !px-4 !text-sm" href={post.opportunityUrl} rel="noreferrer" target="_blank">
+              Open the linked job posting <Icon name="external-link" className="h-4 w-4" />
+            </a>
+          ) : null}
+          <button
+            aria-pressed={decision === "contacted"}
+            className={decision === "contacted" ? "btn btn-primary !min-h-10 !px-4 !text-sm" : "btn btn-ghost !min-h-10 !px-4 !text-sm"}
+            onClick={onContacted}
+            type="button"
+          >
+            <Icon name="check" className="h-4 w-4" />
+            {decision === "contacted" ? "Contacted" : "Mark contacted"}
+          </button>
+          <button
+            aria-pressed={decision === "hidden"}
+            className={decision === "hidden" ? "btn btn-secondary !min-h-10 !px-4 !text-sm" : "btn btn-ghost !min-h-10 !px-4 !text-sm"}
+            onClick={onHidden}
+            type="button"
+          >
+            <Icon name="x" className="h-4 w-4" />
+            {decision === "hidden" ? "Restore" : "Hide"}
+          </button>
           <button
             aria-label="Copy post text"
-            className="btn btn-ghost !min-h-9 !px-2.5"
+            className="btn btn-ghost !min-h-10 !px-3 !text-sm"
             onClick={copyPostText}
             title="Copy post text"
             type="button"
           >
             <Icon name={copied ? "check" : "upload"} className="h-4 w-4" />
-          </button>
-          <button aria-label="Close details" className="btn btn-ghost !min-h-9 !px-2.5" onClick={onClose} type="button">
-            <Icon name="x" className="h-4 w-4" />
+            {copied ? "Copied" : "Copy"}
           </button>
         </div>
-      </div>
 
-      <div className="mt-4 flex items-start gap-3">
-        <AuthorPhoto name={post.author.name} imageUrl={post.author.imageUrl} className="h-14 w-14" />
-        <div className="min-w-0">
-          <p className="text-base font-bold leading-6 text-slate-950">{post.author.name}</p>
-          <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-slate-600">{post.author.headline || "LinkedIn author"}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
-            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">
-              <CompanyLogo company={post.company} size="sm" decorative className="!h-4 !w-4 !rounded !text-[8px]" />
-              {post.company}
-            </span>
-            <span className="inline-flex items-center gap-1"><Icon name="map-pin" className="h-3 w-3" />{post.location.label}</span>
-            <span className="inline-flex items-center gap-1"><Icon name="clock" className="h-3 w-3" />{relativeAge(post.postedAt, renderedAtTimestamp)}</span>
-          </div>
-        </div>
-      </div>
-
-      <h2 className="mt-5 text-lg font-bold tracking-[-0.02em] text-slate-950">{post.opportunityTitle}</h2>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-800">{post.roleFamily}</span>
-        {decision === "contacted" ? <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-800">Contacted</span> : null}
-      </div>
-
-      <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 border-l-4 border-l-sky-300 bg-white">
-        <p className="whitespace-pre-line break-words px-4 py-4 text-[15px] leading-7 text-slate-800 sm:px-5">
-          {post.content || "Link-only post. The role details were recovered from its LinkedIn job card."}
-        </p>
-        {postLinks.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:px-5">
-            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Links in post</span>
-            {postLinks.map((url) => (
-              <a
-                className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-sky-700 transition-colors hover:border-sky-300 hover:bg-sky-50"
-                href={url}
-                key={url}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <Icon name="external-link" className="h-3 w-3 shrink-0" />
-                <span className="truncate">{linkLabel(url)}</span>
-              </a>
-            ))}
-          </div>
+        {why.length > 0 ? (
+          <details className="mt-4 border-t border-slate-100 pt-3">
+            <summary className="min-h-9 cursor-pointer text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+              Why it surfaced · {firstName(post.author.name)}
+            </summary>
+            <ul className="space-y-2 pb-1 pt-2">
+              {why.slice(0, 6).map((reason) => (
+                <li className="flex gap-2 text-xs leading-5 text-slate-700" key={reason}>
+                  <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
+                  <span>{reason}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
         ) : null}
       </div>
-
-      <div className="mt-4">
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Recommended action</p>
-        <p className="mt-1.5 text-xs leading-5 text-slate-700">
-          {post.matchStatus === "review"
-            ? "Confirm the location and role details before messaging."
-            : `Open ${firstName(post.author.name)}’s profile, mention this post, and ask one focused question.`}
-        </p>
-      </div>
-
-      <a className="btn btn-primary mt-4 w-full" href={profileUrl} rel="noreferrer" target="_blank">
-        Open profile to message <Icon name="external-link" className="h-4 w-4" />
-      </a>
-      <QuickActions post={post} decision={decision} onContacted={onContacted} onHidden={onHidden} />
-
-      {/* Matched job opening */}
-      <div className="mt-5 border-t border-slate-200 pt-4">
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Matched job opening</p>
-        {matchedLoading ? (
-          <div className="mt-2 space-y-2">
-            <div className="h-16 animate-pulse rounded-xl bg-slate-100" />
-            <div className="h-16 animate-pulse rounded-xl bg-slate-100" />
-          </div>
-        ) : matchedJobs && matchedJobs.length > 0 ? (
-          <div className="mt-2 space-y-2">
-            {matchedJobs.map((job) => (
-              <a
-                className="block rounded-xl border border-slate-200 bg-white p-3 transition-colors hover:border-sky-300 hover:bg-sky-50"
-                href={job.absoluteUrl}
-                key={job.id}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <span className="flex items-start justify-between gap-2">
-                  <span className="block text-[13px] font-bold leading-5 text-slate-950">{job.title}</span>
-                  <Icon name="arrow-up-right" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-700" />
-                </span>
-                <span className="mt-1 block truncate text-[11px] text-slate-500">{job.company} · {job.location}</span>
-                <span className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-slate-500">
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">{job.badgeLabel}</span>
-                  <span>{job.postedAt ? relativeAge(job.postedAt, renderedAtTimestamp) : "date unknown"}</span>
-                </span>
-              </a>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-2 rounded-xl border border-dashed border-slate-300 p-3 text-xs leading-5 text-slate-500">
-            No matching opening found in the job index.
-            {post.opportunityUrl ? (
-              <a className="mt-1 block font-bold text-sky-700 hover:underline" href={post.opportunityUrl} rel="noreferrer" target="_blank">
-                Open the linked job posting <Icon name="external-link" className="inline h-3 w-3" />
-              </a>
-            ) : null}
-          </div>
-        )}
-      </div>
-
-      {why.length > 0 ? (
-        <details className="mt-5 border-t border-slate-200 pt-4">
-          <summary className="min-h-9 cursor-pointer text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Why it surfaced</summary>
-          <ul className="space-y-2 pb-1 pt-2">
-            {why.slice(0, 6).map((reason) => (
-              <li className="flex gap-2 text-xs leading-5 text-slate-700" key={reason}>
-                <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
-                <span>{reason}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-    </div>
+    </article>
   );
 }
