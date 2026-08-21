@@ -232,3 +232,58 @@ test("selecting a European city overrides the U.S.-only country default", () => 
   assert.equal(result.total, 1);
   assert.equal(result.jobs[0].location, "London, United Kingdom");
 });
+
+test("a requisition id lookup returns the job regardless of default filters", () => {
+  // Senior + finance role that every curated default (tech portal, "today"
+  // date, early-career experience) would otherwise hide.
+  const data = entries([
+    job({
+      id: "10506349",
+      title: "Senior Financial Analyst, Fleet Finance",
+      company: "Amazon",
+      location: "Nashville, Tennessee, USA",
+      contentText: "Required Qualifications: 6+ years of finance experience.",
+      postedAt: "2026-08-10T12:00:00.000Z",
+    }),
+  ]);
+  const result = searchJobs(data, { ...defaultSearchParams, q: "10506349" });
+  assert.equal(result.total, 1);
+  assert.equal(result.jobs[0].id, "10506349");
+});
+
+test("an AMZ-prefixed requisition id lookup matches the same job", () => {
+  const data = entries([
+    job({ id: "10506349", title: "Senior Financial Analyst", company: "Amazon" }),
+  ]);
+  const result = searchJobs(data, { ...defaultSearchParams, q: "AMZ10506349" });
+  assert.equal(result.total, 1);
+  assert.equal(result.jobs[0].id, "10506349");
+});
+
+test("an id lookup dedupes duplicate postings of the same requisition", () => {
+  // Amazon can briefly carry the same requisition twice (reposted listing);
+  // a direct id search must still return exactly one result.
+  const data = entries([
+    job({ id: "10506349", title: "Senior Financial Analyst, Fleet Finance", company: "Amazon", location: "Nashville, Tennessee, USA" }),
+    job({ id: "10506349", title: "Senior Financial Analyst, Fleet Finance", company: "Amazon", location: "Nashville, Tennessee, USA" }),
+  ]);
+  const result = searchJobs(data, { ...defaultSearchParams, q: "10506349" });
+  assert.equal(result.total, 1);
+  assert.equal(result.jobs[0].id, "10506349");
+});
+
+test("an unknown requisition id falls through to the normal keyword search", () => {
+  const data = entries([
+    job({ id: "1", title: "Machine Learning Engineer", company: "Alpha", contentText: "Requisition 10506349. Required Qualifications: 3+ years of experience." }),
+  ]);
+  const result = searchJobs(data, { ...defaultSearchParams, q: "99999999", date: "all" });
+  assert.equal(result.total, 0);
+
+  const contentMatch = searchJobs(data, {
+    ...defaultSearchParams,
+    q: "10506349",
+    date: "all",
+    experience: ["all"],
+  });
+  assert.equal(contentMatch.total, 1, "id text inside a description still matches by keyword");
+});

@@ -70,7 +70,18 @@ export function buildSearchEntry(job: GreenhouseJob): JobSearchEntry {
     nonTechFamily,
     requirement,
     seniorSignal: hasSeniorOrManagerSignal(job.title),
-    searchText: [job.title, job.company, job.location, category, job.contentText]
+    // The requisition id and its provider-prefixed form (e.g. Amazon's
+    // "AMZ10506349") are searchable so users can look a job up by the exact
+    // id they saw on the company's ATS.
+    searchText: [
+      job.title,
+      job.company,
+      job.location,
+      category,
+      String(job.id),
+      `amz${job.id}`,
+      job.contentText,
+    ]
       .join(" ")
       .toLowerCase(),
   };

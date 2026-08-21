@@ -289,6 +289,43 @@ function compareEntries(
 }
 
 /**
+ * True when the query looks like a requisition reference ("10506349" or
+ * "AMZ10506349"). An exact id is unambiguous intent, so matching jobs bypass
+ * the curated portal/date/experience defaults that would otherwise hide them.
+ */
+const jobIdLookupPattern = /^(?:amz)?\d{5,}$/u;
+
+function entryMatchesJobId(entry: JobSearchEntry, query: string) {
+  const raw = String(entry.job.id).toLowerCase();
+  return raw === query || `amz${raw}` === query;
+}
+
+function finalizeSearchResult(
+  entries: JobSearchEntry[],
+  params: JobSearchParams,
+  cursorOffset: number,
+): JobSearchResult {
+  const sorted = entries.sort((left, right) => {
+    const byKey = compareEntries(left, right, params.sort, params.dir);
+    if (byKey !== 0) return byKey;
+    return String(left.job.id).localeCompare(String(right.job.id));
+  });
+
+  const offset = Math.min(cursorOffset, sorted.length);
+  const page = sorted.slice(offset, offset + params.limit);
+  const companies = new Set(sorted.map((entry) => entry.job.company)).size;
+  const nextOffset = offset + page.length;
+
+  return {
+    jobs: page.map(toJobListItem),
+    nextCursor: nextOffset < sorted.length ? encodeCursor(nextOffset) : null,
+    total: sorted.length,
+    companies,
+    offset,
+  };
+}
+
+/**
  * Server-side search over the normalized snapshot. Runs on the server only;
  * returns slim items without any provider description text.
  */
@@ -299,6 +336,30 @@ export function searchJobs(
   now = new Date(),
 ): JobSearchResult {
   const query = params.q.trim().toLowerCase();
+
+  // Direct job-reference lookup (e.g. Amazon req "10506349"): the id is the
+  // answer, so matching jobs surface regardless of the portal/date/experience
+  // defaults. Without this, a "financial analyst" id search found nothing
+  // because the id never appeared in the job's title or description.
+  // Deduped by requisition: a reposted listing can briefly appear twice in a
+  // snapshot, and one requisition must still yield exactly one result.
+  if (jobIdLookupPattern.test(query)) {
+    const seenIds = new Set<string>();
+    const direct = entries.filter((entry) => {
+      if (!entryMatchesJobId(entry, query)) {
+        return false;
+      }
+      const key = `${entry.job.boardToken}:${entry.job.id}`;
+      if (seenIds.has(key)) {
+        return false;
+      }
+      seenIds.add(key);
+      return true;
+    });
+    if (direct.length > 0) {
+      return finalizeSearchResult(direct, params, cursorOffset);
+    }
+  }
 
   // Selecting any city (e.g. London) overrides the U.S.-only country default,
   // otherwise the country filter would silently exclude every European match.
@@ -319,22 +380,5 @@ export function searchJobs(
     );
   });
 
-  const sorted = matched.sort((left, right) => {
-    const byKey = compareEntries(left, right, params.sort, params.dir);
-    if (byKey !== 0) return byKey;
-    return String(left.job.id).localeCompare(String(right.job.id));
-  });
-
-  const offset = Math.min(cursorOffset, sorted.length);
-  const page = sorted.slice(offset, offset + params.limit);
-  const companies = new Set(matched.map((entry) => entry.job.company)).size;
-  const nextOffset = offset + page.length;
-
-  return {
-    jobs: page.map(toJobListItem),
-    nextCursor: nextOffset < sorted.length ? encodeCursor(nextOffset) : null,
-    total: sorted.length,
-    companies,
-    offset,
-  };
+  return finalizeSearchResult(matched, params, cursorOffset);
 }
