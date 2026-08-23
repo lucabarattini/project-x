@@ -7,5 +7,14 @@
     "apiUrl": "https://arrowstreetcapital.wd5.myworkdayjobs.com/wday/cxs/arrowstreetcapital/Arrowstreet/jobs",
     "detailUrlBase": "https://arrowstreetcapital.wd5.myworkdayjobs.com/wday/cxs/arrowstreetcapital/Arrowstreet",
     "lastVerifiedJobCount": 21
+  },
+  {
+    "company": "Zillow",
+    "token": "zillow/Zillow_Group_External",
+    "source": "official-careers-page,workday-cxs,user-provided-url",
+    "boardUrl": "https://zillow.wd5.myworkdayjobs.com/en-US/Zillow_Group_External",
+    "apiUrl": "https://zillow.wd5.myworkdayjobs.com/wday/cxs/zillow/Zillow_Group_External/jobs",
+    "detailUrlBase": "https://zillow.wd5.myworkdayjobs.com/wday/cxs/zillow/Zillow_Group_External",
+    "lastVerifiedJobCount": 116
   }
 ]

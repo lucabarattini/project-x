@@ -17,6 +17,11 @@ type WorkdaySearchResponse = {
   jobPostings?: WorkdaySearchJob[];
 };
 
+/** List-level job carrying the externalPath needed for the detail fetch. */
+type WorkdayListJob = GreenhouseJob & {
+  externalPath: string;
+};
+
 type WorkdayDetailResponse = {
   jobPostingInfo?: {
     id?: string;
@@ -29,6 +34,11 @@ type WorkdayDetailResponse = {
 };
 
 export const workdayBoards = boards as WorkdayBoard[];
+
+// Workday's CXS API rejects page sizes above 20 with HTTP 400, so the search
+// must paginate with limit=20 and advance the offset.
+const searchPageSize = 20;
+const maxSearchPages = 10;
 
 function stripHtml(html = "") {
   return html
@@ -69,7 +79,7 @@ async function fetchWorkdayDetail(board: WorkdayBoard, externalPath: string) {
   try {
     const response = await fetch(`${board.detailUrlBase}${externalPath}`, {
       cache: "no-store",
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(5_000),
       headers: {
         accept: "application/json",
         "user-agent": "Mozilla/5.0",
@@ -86,57 +96,109 @@ async function fetchWorkdayDetail(board: WorkdayBoard, externalPath: string) {
   }
 }
 
+async function searchWorkdayBoard(board: WorkdayBoard): Promise<WorkdayListJob[]> {
+  const allJobs: WorkdayListJob[] = [];
+
+  for (let page = 0; page < maxSearchPages; page += 1) {
+    const offset = page * searchPageSize;
+    const response = await fetch(board.apiUrl, {
+      method: "POST",
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(8_000),
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        "user-agent": "Mozilla/5.0",
+      },
+      body: JSON.stringify({
+        appliedFacets: {},
+        limit: searchPageSize,
+        offset,
+        searchText: "",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`${board.company} returned ${response.status}`);
+    }
+
+    const data = (await response.json()) as WorkdaySearchResponse;
+    const postings = data.jobPostings ?? [];
+    for (const job of postings) {
+      if (!job.externalPath) {
+        continue;
+      }
+      allJobs.push({
+        id: job.bulletFields?.[0] ?? job.externalPath,
+        title: job.title || "Untitled",
+        company: board.company,
+        boardToken: board.token,
+        location: job.locationsText || "Not listed",
+        absoluteUrl: `${board.boardUrl}${job.externalPath}`,
+        contentText: "",
+        postedAt: parsePostedOn(job.postedOn),
+        updatedAt: null,
+        externalPath: job.externalPath,
+      });
+    }
+
+    if (postings.length < searchPageSize) {
+      break;
+    }
+  }
+
+  return allJobs;
+}
+
+/**
+ * Fills in descriptions from each job's detail page with bounded concurrency
+ * and a wall-clock deadline, so a slow Workday degrades to list-level data
+ * instead of blowing the provider budget.
+ */
+async function enrichWorkdayDetails(
+  jobs: WorkdayListJob[],
+  board: WorkdayBoard,
+  startedAt: number,
+  deadlineMs: number,
+) {
+  const detailed: GreenhouseJob[] = [];
+  let index = 0;
+
+  async function worker() {
+    while (index < jobs.length) {
+      const current = jobs[index];
+      index += 1;
+      if (Date.now() - startedAt > deadlineMs) {
+        detailed.push(current);
+        continue;
+      }
+      const detail = await fetchWorkdayDetail(board, current.externalPath);
+      const info = detail?.jobPostingInfo;
+      detailed.push({
+        id: current.id,
+        title: info?.title || current.title,
+        company: current.company,
+        boardToken: current.boardToken,
+        location: info?.location || current.location,
+        absoluteUrl: current.absoluteUrl,
+        contentText: stripHtml(info?.jobDescription),
+        postedAt: info?.startDate ?? current.postedAt,
+        updatedAt: null,
+      });
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(8, jobs.length) }, worker));
+  return detailed;
+}
+
 export async function fetchLatestWorkdayJobs() {
+  const startedAt = Date.now();
   const results = await Promise.all(
     workdayBoards.map(async (board) => {
       try {
-        const response = await fetch(board.apiUrl, {
-          method: "POST",
-          next: { revalidate: 300 },
-          signal: AbortSignal.timeout(8_000),
-          headers: {
-            accept: "application/json",
-            "content-type": "application/json",
-            "user-agent": "Mozilla/5.0",
-          },
-          body: JSON.stringify({
-            appliedFacets: {},
-            limit: 100,
-            offset: 0,
-            searchText: "",
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`${board.company} returned ${response.status}`);
-        }
-
-        const data = (await response.json()) as WorkdaySearchResponse;
-        const jobs = await Promise.all(
-          (data.jobPostings ?? []).map(async (job): Promise<GreenhouseJob | null> => {
-            if (!job.externalPath) {
-              return null;
-            }
-
-            const detail = await fetchWorkdayDetail(board, job.externalPath);
-            const detailInfo = detail?.jobPostingInfo;
-            const id = detailInfo?.jobRequisitionId ?? job.bulletFields?.[0] ?? job.externalPath;
-
-            return {
-              id,
-              title: detailInfo?.title || job.title || "Untitled",
-              company: board.company,
-              boardToken: board.token,
-              location: detailInfo?.location || job.locationsText || "Not listed",
-              absoluteUrl: `${board.boardUrl}${job.externalPath}`,
-              contentText: stripHtml(detailInfo?.jobDescription),
-              postedAt: detailInfo?.startDate ?? parsePostedOn(job.postedOn),
-              updatedAt: null,
-            };
-          }),
-        );
-
-        return jobs.filter((job): job is GreenhouseJob => job !== null);
+        const jobs = await searchWorkdayBoard(board);
+        return enrichWorkdayDetails(jobs, board, startedAt, 15_000);
       } catch {
         return [];
       }

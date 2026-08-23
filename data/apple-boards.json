@@ -1,0 +1,10 @@
+[
+  {
+    "company": "Apple",
+    "token": "apple-jobs",
+    "source": "official-careers-page,apple-api,github-reference",
+    "boardUrl": "https://jobs.apple.com/en-us/search",
+    "apiUrl": "https://jobs.apple.com/api/v1/role/search",
+    "lastVerifiedJobCount": 0
+  }
+]

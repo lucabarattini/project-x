@@ -1,0 +1,10 @@
+[
+  {
+    "company": "Microsoft",
+    "token": "microsoft-eightfold",
+    "source": "official-careers-page,eightfold-api,github-reference",
+    "boardUrl": "https://microsoft.eightfold.ai/careers",
+    "apiUrl": "https://microsoft.eightfold.ai/api/apply/v2/jobs",
+    "lastVerifiedJobCount": 0
+  }
+]

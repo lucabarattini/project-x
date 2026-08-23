@@ -17,11 +17,12 @@ import {
 } from "./targets";
 
 test("derives every hiring-post company from the configured job boards", () => {
-  assert.equal(hiringPostCompanies.length, 87);
+  assert.equal(hiringPostCompanies.length, 88);
   assert.ok(hiringPostCompanies.includes("Amazon"));
   assert.ok(hiringPostCompanies.includes("Google"));
   assert.ok(hiringPostCompanies.includes("OpenAI"));
   assert.ok(hiringPostCompanies.includes("Jane Street"));
+  assert.ok(hiringPostCompanies.includes("Zillow"));
 });
 
 test("normalizes casing, punctuation, and stylized Unicode company names", () => {

@@ -11,6 +11,10 @@ import {
 } from "./providers/greenhouse";
 import { fetchLatestLeverJobs, leverBoards } from "./providers/lever";
 import { fetchLatestWorkdayJobs, workdayBoards } from "./providers/workday";
+import { expediaBoards, fetchLatestExpediaJobs } from "./providers/expedia";
+import { fetchLatestMicrosoftJobs, microsoftBoards } from "./providers/microsoft";
+import { appleBoards, fetchLatestAppleJobs } from "./providers/apple";
+import { fetchLatestMetaJobs, metaBoards } from "./providers/meta";
 import {
   customCareerBoards,
   fetchLatestCustomCareerJobs,
@@ -48,6 +52,10 @@ export const jobBoards: JobBoard[] = [
   ...amazonBoards,
   ...googleBoards,
   ...customCareerBoards,
+  ...expediaBoards,
+  ...microsoftBoards,
+  ...appleBoards,
+  ...metaBoards,
 ];
 
 export type ProviderDiagnostic = {
@@ -179,6 +187,26 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
       provider: "workday",
       timeoutMs: 20_000,
       run: () => fetchLatestWorkdayJobs(),
+    },
+    {
+      provider: "expedia",
+      timeoutMs: 25_000,
+      run: () => fetchLatestExpediaJobs(),
+    },
+    {
+      provider: "microsoft",
+      timeoutMs: 25_000,
+      run: () => fetchLatestMicrosoftJobs(),
+    },
+    {
+      provider: "apple",
+      timeoutMs: 20_000,
+      run: () => fetchLatestAppleJobs(),
+    },
+    {
+      provider: "meta",
+      timeoutMs: 20_000,
+      run: () => fetchLatestMetaJobs(),
     },
     {
       provider: "amazon",

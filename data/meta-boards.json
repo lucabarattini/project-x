@@ -1,0 +1,10 @@
+[
+  {
+    "company": "Meta",
+    "token": "meta-careers",
+    "source": "official-careers-page,meta-graphql,github-reference",
+    "boardUrl": "https://www.metacareers.com/jobs",
+    "apiUrl": "https://www.metacareers.com/graphql",
+    "lastVerifiedJobCount": 0
+  }
+]

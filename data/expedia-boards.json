@@ -1,0 +1,10 @@
+[
+  {
+    "company": "Expedia Group",
+    "token": "expedia-group",
+    "source": "official-careers-page,wordpress-sitemap,user-provided-url",
+    "boardUrl": "https://careers.expediagroup.com/jobs",
+    "sitemapUrl": "https://careers.expediagroup.com/jobs-sitemap.xml",
+    "lastVerifiedJobCount": 195
+  }
+]
