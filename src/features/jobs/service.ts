@@ -204,8 +204,10 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
       run: () => fetchLatestAppleJobs(),
     },
     {
+      // Meta has no list API: every posting costs one detail fetch for its
+      // structured data, so it needs the wider budget the fan-out providers get.
       provider: "meta",
-      timeoutMs: 20_000,
+      timeoutMs: 30_000,
       run: () => fetchLatestMetaJobs(),
     },
     {

@@ -2,9 +2,10 @@
   {
     "company": "Meta",
     "token": "meta-careers",
-    "source": "official-careers-page,meta-graphql,github-reference",
-    "boardUrl": "https://www.metacareers.com/jobs",
-    "apiUrl": "https://www.metacareers.com/graphql",
-    "lastVerifiedJobCount": 0
+    "source": "official-careers-page,robots-declared-sitemap,job-posting-structured-data",
+    "boardUrl": "https://www.metacareers.com/jobsearch/",
+    "apiUrl": "https://www.metacareers.com/jobsearch/sitemap.xml",
+    "sitemapUrl": "https://www.metacareers.com/jobsearch/sitemap.xml",
+    "lastVerifiedJobCount": 869
   }
 ]

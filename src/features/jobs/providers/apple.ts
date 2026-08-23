@@ -1,16 +1,29 @@
 import boards from "../../../../data/apple-boards.json";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
-export const appleBoards = boards as GreenhouseBoard[];
+type AppleBoard = GreenhouseBoard & {
+  searchUrl: string;
+};
+
+export const appleBoards = boards as AppleBoard[];
+
+export type AppleLocation = {
+  name?: string;
+  city?: string;
+  stateProvince?: string;
+  countryName?: string;
+};
 
 export type AppleSearchResult = {
   positionId?: string | number;
+  reqId?: string;
   postingTitle?: string;
-  location?: string;
-  postingDate?: number | string;
-  transformedPostingUrl?: string;
-  canonicalUrl?: string;
-  jobDescription?: string;
+  transformedPostingTitle?: string;
+  locations?: AppleLocation[];
+  postDateInGMT?: string;
+  postingDate?: string;
+  jobSummary?: string;
+  team?: { teamName?: string };
 };
 
 export type ParsedAppleJob = {
@@ -22,69 +35,90 @@ export type ParsedAppleJob = {
   postedAt: string | null;
 };
 
-function stripHtml(html = "") {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/giu, " ")
-    .replace(/<style[\s\S]*?<\/style>/giu, " ")
-    .replace(/<li[^>]*>/giu, " - ")
-    .replace(/<br\s*\/?>/giu, "\n")
-    .replace(/<\/(p|div|section|h2|h3|ul|ol)>/giu, "\n")
-    .replace(/<[^>]+>/gu, " ")
-    .replace(/&nbsp;/giu, " ")
-    .replace(/&amp;/giu, "&")
-    .replace(/&quot;/giu, "\"")
-    .replace(/&#39;/giu, "'")
-    .replace(/\s+/gu, " ")
-    .trim();
+const browserHeaders = {
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "accept-language": "en-US,en;q=0.9",
+  "user-agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+};
+
+/**
+ * Renders one `locations[]` entry as "City, State, Country". The search page
+ * usually fills in `city` alone (state and country come back empty), so the
+ * country is appended from the USA filter we searched with — without it the
+ * downstream country filter cannot tell "Cupertino" apart from a non-US city.
+ */
+export function formatAppleLocation(locations: AppleLocation[] | undefined) {
+  const first = Array.isArray(locations) ? locations[0] : undefined;
+  if (!first) {
+    return "Not listed";
+  }
+
+  const country = (first.countryName || "United States")
+    .trim()
+    .replace(/^United States of America$/iu, "United States");
+
+  const parts = [first.city || first.name || "", first.stateProvince || "", country]
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return [...new Set(parts)].join(", ") || "Not listed";
 }
 
 /**
- * Normalizes one `/api/v1/role/search` response (searchResults[] with
- * positionId / postingTitle / location / postingDate).
+ * Apple's search page is server-rendered: the React Router loader data is
+ * inlined as `window.__staticRouterHydrationData = JSON.parse("<json>")`, so
+ * one HTML GET yields a full page of postings with no token exchange. The
+ * `/api/v1/role/search` endpoint this replaced answers 401 to every
+ * unauthenticated caller, and the older `/api/csrfToken` route is gone.
  */
-export function parseAppleSearchResults(json: unknown): ParsedAppleJob[] {
-  const results = (json as { searchResults?: unknown } | null)?.searchResults;
+export function parseAppleHydrationData(html: string): ParsedAppleJob[] {
+  const literal = html.match(
+    /window\.__staticRouterHydrationData\s*=\s*JSON\.parse\(("[\s\S]*?[^\\]")\);/u,
+  )?.[1];
+  if (!literal) {
+    return [];
+  }
+
+  let results: unknown;
+  try {
+    // The argument is a JS string literal holding the JSON document: unwrap
+    // the literal first, then parse what it contained.
+    results = (
+      JSON.parse(JSON.parse(literal) as string) as {
+        loaderData?: { search?: { searchResults?: unknown } };
+      }
+    )?.loaderData?.search?.searchResults;
+  } catch {
+    return [];
+  }
   if (!Array.isArray(results)) {
     return [];
   }
 
   const jobs: ParsedAppleJob[] = [];
   for (const result of results as AppleSearchResult[]) {
-    const title = typeof result.postingTitle === "string" ? result.postingTitle.trim() : "";
-    if (!title) continue;
+    const title =
+      typeof result.postingTitle === "string" ? result.postingTitle.trim() : "";
+    const id = result.positionId ?? result.reqId ?? "";
+    if (!title || !id) continue;
 
-    const id = result.positionId ?? result.canonicalUrl ?? "";
-    if (!id) continue;
+    const slug =
+      typeof result.transformedPostingTitle === "string"
+        ? `/${result.transformedPostingTitle}`
+        : "";
 
-    let absoluteUrl = "";
-    if (
-      typeof result.transformedPostingUrl === "string" &&
-      /^https:\/\//u.test(result.transformedPostingUrl)
-    ) {
-      absoluteUrl = result.transformedPostingUrl;
-    } else {
-      absoluteUrl = `https://jobs.apple.com/en-us/details/${id}`;
-    }
-
-    let postedAt: string | null = null;
-    if (typeof result.postingDate === "number") {
-      const date = new Date(result.postingDate);
-      postedAt = Number.isNaN(date.getTime()) ? null : date.toISOString();
-    } else if (typeof result.postingDate === "string") {
-      const timestamp = Date.parse(result.postingDate);
-      postedAt = Number.isNaN(timestamp) ? null : new Date(timestamp).toISOString();
-    }
+    const postedAt = Date.parse(result.postDateInGMT ?? result.postingDate ?? "");
 
     jobs.push({
       id: String(id),
       title,
-      location:
-        typeof result.location === "string" && result.location.trim()
-          ? result.location.trim()
-          : "Not listed",
-      absoluteUrl,
-      contentText: stripHtml(result.jobDescription),
-      postedAt,
+      location: formatAppleLocation(result.locations),
+      absoluteUrl: `https://jobs.apple.com/en-us/details/${id}${slug}`,
+      contentText: [result.team?.teamName, result.jobSummary]
+        .filter((part): part is string => typeof part === "string" && Boolean(part))
+        .join(". "),
+      postedAt: Number.isNaN(postedAt) ? null : new Date(postedAt).toISOString(),
     });
   }
 
@@ -92,37 +126,32 @@ export function parseAppleSearchResults(json: unknown): ParsedAppleJob[] {
 }
 
 /**
- * Apple's jobs search API: POST /api/v1/role/search with the locale and a
- * US location filter. Paginated with `page`; the response exposes
- * searchResults + totalRecords.
+ * Walks the US search results newest-first, 20 postings per page. Apple
+ * reports ~4.5k US openings, so `maxJobs` is what actually bounds the crawl.
  */
 export async function fetchLatestAppleJobs(options: { maxJobs?: number } = {}) {
-  const { maxJobs = 150 } = options;
+  const { maxJobs = 300 } = options;
   const board = appleBoards[0];
-  const pageSize = 25;
+  const pageSize = 20;
   const jobs: GreenhouseJob[] = [];
+  // Wall-clock budget inside the caller's 20s provider timeout: a slow
+  // window stops paging and keeps the postings already collected.
+  const startedAt = Date.now();
+  const runDeadlineMs = 16_000;
 
   for (let page = 1; page <= Math.ceil(maxJobs / pageSize); page += 1) {
+    if (Date.now() - startedAt > runDeadlineMs) {
+      break;
+    }
+
+    const url = `${board.searchUrl}&page=${page}`;
+
     let response: Response;
     try {
-      response = await fetch(board.apiUrl, {
-        method: "POST",
+      response = await fetch(url, {
         next: { revalidate: 300 },
-        signal: AbortSignal.timeout(8_000),
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-          "user-agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-          origin: "https://jobs.apple.com",
-          referer: "https://jobs.apple.com/en-us/search",
-        },
-        body: JSON.stringify({
-          query: "",
-          locale: "en-us",
-          filters: { postingpostLocation: ["postLocation-USA"] },
-          page,
-        }),
+        signal: AbortSignal.timeout(10_000),
+        headers: browserHeaders,
       });
     } catch {
       break;
@@ -131,7 +160,7 @@ export async function fetchLatestAppleJobs(options: { maxJobs?: number } = {}) {
       break;
     }
 
-    const parsed = parseAppleSearchResults(await response.json());
+    const parsed = parseAppleHydrationData(await response.text());
     if (parsed.length === 0) {
       break;
     }

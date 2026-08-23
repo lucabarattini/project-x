@@ -2,9 +2,10 @@
   {
     "company": "Apple",
     "token": "apple-jobs",
-    "source": "official-careers-page,apple-api,github-reference",
+    "source": "official-careers-page,server-rendered-search",
     "boardUrl": "https://jobs.apple.com/en-us/search",
-    "apiUrl": "https://jobs.apple.com/api/v1/role/search",
-    "lastVerifiedJobCount": 0
+    "apiUrl": "https://jobs.apple.com/en-us/search?location=united-states-USA&sort=newest",
+    "searchUrl": "https://jobs.apple.com/en-us/search?location=united-states-USA&sort=newest",
+    "lastVerifiedJobCount": 4497
   }
 ]

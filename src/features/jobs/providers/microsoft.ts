@@ -3,20 +3,21 @@ import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
 export const microsoftBoards = boards as GreenhouseBoard[];
 
-export type EightfoldPosition = {
+export type PcsxPosition = {
   id?: string | number;
+  displayJobId?: string;
+  atsJobId?: string;
   name?: string;
-  posting_name?: string;
-  location?: string;
   locations?: string[];
+  standardizedLocations?: string[];
   department?: string | null;
-  business_unit?: string | null;
-  t_create?: number;
-  t_update?: number;
-  canonicalPositionUrl?: string;
+  workLocationOption?: string | null;
+  postedTs?: number;
+  creationTs?: number;
+  positionUrl?: string;
 };
 
-export type ParsedEightfoldJob = {
+export type ParsedPcsxJob = {
   id: string;
   title: string;
   location: string;
@@ -26,64 +27,63 @@ export type ParsedEightfoldJob = {
 };
 
 /**
- * Normalizes one `/api/apply/v2/jobs` response. Eightfold positions carry
- * `name` (fallback `posting_name`), a flat `location` plus `locations[]`,
- * epoch-seconds `t_create`/`t_update`, and `canonicalPositionUrl` (fallback
- * `careers?pid=<id>`).
+ * Collapses one `locations[]` entry. Microsoft pads multi-site postings out
+ * to "United States, Multiple Locations, Multiple Locations", so repeated
+ * segments are dropped rather than shown back to the reader.
  */
-export function parseEightfoldJobs(
+export function formatPcsxLocation(locations: string[] | undefined) {
+  const first = Array.isArray(locations)
+    ? locations.find((entry) => typeof entry === "string" && entry.trim())
+    : undefined;
+  if (!first) {
+    return "Not listed";
+  }
+
+  const segments = first
+    .split(",")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  return [...new Set(segments)].join(", ") || "Not listed";
+}
+
+/**
+ * Normalizes one `/api/pcsx/search` response. Positions carry `name`,
+ * `locations[]`, epoch-seconds `postedTs`/`creationTs` and a site-relative
+ * `positionUrl`.
+ */
+export function parsePcsxPositions(
   json: unknown,
-  fallbackBaseUrl: string,
-): ParsedEightfoldJob[] {
-  const positions = (json as { positions?: unknown } | null)?.positions;
+  siteBaseUrl: string,
+): ParsedPcsxJob[] {
+  const positions = (json as { data?: { positions?: unknown } } | null)?.data?.positions;
   if (!Array.isArray(positions)) {
     return [];
   }
 
-  const jobs: ParsedEightfoldJob[] = [];
-  for (const position of positions as EightfoldPosition[]) {
-    const title =
-      typeof position.name === "string" && position.name.trim()
-        ? position.name.trim()
-        : typeof position.posting_name === "string"
-          ? position.posting_name.trim()
-          : "";
-    if (!title) continue;
+  const jobs: ParsedPcsxJob[] = [];
+  for (const position of positions as PcsxPosition[]) {
+    const title = typeof position.name === "string" ? position.name.trim() : "";
+    const id = position.id ?? position.displayJobId ?? "";
+    if (!title || !id) continue;
 
-    let absoluteUrl = "";
-    if (
-      typeof position.canonicalPositionUrl === "string" &&
-      /^https:\/\//u.test(position.canonicalPositionUrl)
-    ) {
-      absoluteUrl = position.canonicalPositionUrl;
-    } else if (position.id !== undefined && position.id !== null) {
-      absoluteUrl = `${fallbackBaseUrl}?pid=${position.id}`;
-    }
-    if (!absoluteUrl) continue;
+    const path =
+      typeof position.positionUrl === "string" && position.positionUrl
+        ? position.positionUrl
+        : `/careers/job/${id}`;
 
-    const locationParts = [
-      typeof position.location === "string" ? position.location : "",
-      ...(Array.isArray(position.locations)
-        ? position.locations.filter((item): item is string => typeof item === "string")
-        : []),
-    ].filter(Boolean);
-
-    const postedAt =
-      typeof position.t_create === "number"
-        ? new Date(position.t_create * 1000).toISOString()
-        : typeof position.t_update === "number"
-          ? new Date(position.t_update * 1000).toISOString()
-          : null;
+    const timestamp = position.postedTs ?? position.creationTs;
 
     jobs.push({
-      id: String(position.id ?? absoluteUrl),
+      id: String(position.displayJobId ?? position.atsJobId ?? id),
       title,
-      location: [...new Set(locationParts)].join(" · ") || "Not listed",
-      absoluteUrl,
-      contentText: [position.department, position.business_unit]
-        .filter((item): item is string => typeof item === "string" && Boolean(item))
+      location: formatPcsxLocation(position.locations),
+      absoluteUrl: new URL(path, siteBaseUrl).toString(),
+      contentText: [position.department, position.workLocationOption]
+        .filter((part): part is string => typeof part === "string" && Boolean(part))
         .join(" "),
-      postedAt,
+      postedAt:
+        typeof timestamp === "number" ? new Date(timestamp * 1000).toISOString() : null,
     });
   }
 
@@ -91,26 +91,40 @@ export function parseEightfoldJobs(
 }
 
 /**
- * Microsoft's careers site is now built on Eightfold AI (the old
- * gcsservices endpoint is dead). The public per-tenant jobs endpoint caps a
- * page at 10 rows, so a full crawl is count/10 requests; maxJobs bounds it.
+ * Microsoft retired `gcsservices.careers.microsoft.com` (its hostname now
+ * answers with a mismatched CDN certificate) and moved onto an Eightfold
+ * PCSX site. `/api/pcsx/search` is one of the paths their robots.txt allows;
+ * the older `/api/apply/v2/jobs` answers 403 "Not authorized for PCSX".
+ * A page is capped at 10 rows server-side, so a US crawl is maxJobs/10 calls.
  */
 export async function fetchLatestMicrosoftJobs(options: { maxJobs?: number } = {}) {
-  const { maxJobs = 200 } = options;
+  const { maxJobs = 300 } = options;
   const board = microsoftBoards[0];
   const pageSize = 10;
-  const maxPages = Math.ceil(maxJobs / pageSize);
   const jobs: GreenhouseJob[] = [];
+  // Wall-clock budget inside the caller's 25s provider timeout: a slow
+  // window stops paging and keeps the postings already collected.
+  const startedAt = Date.now();
+  const runDeadlineMs = 20_000;
 
-  for (let page = 0; page < maxPages; page += 1) {
-    const start = page * pageSize;
-    const url = `${board.apiUrl}?start=${start}&num=${pageSize}`;
+  for (let page = 0; page < Math.ceil(maxJobs / pageSize); page += 1) {
+    if (Date.now() - startedAt > runDeadlineMs) {
+      break;
+    }
+
+    const url = `${board.apiUrl}&start=${page * pageSize}&num=${pageSize}`;
+
     let response: Response;
     try {
       response = await fetch(url, {
         next: { revalidate: 300 },
         signal: AbortSignal.timeout(8_000),
-        headers: { accept: "application/json", "user-agent": "Mozilla/5.0" },
+        headers: {
+          accept: "application/json",
+          referer: board.boardUrl,
+          "user-agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+        },
       });
     } catch {
       break;
@@ -119,7 +133,7 @@ export async function fetchLatestMicrosoftJobs(options: { maxJobs?: number } = {
       break;
     }
 
-    const parsed = parseEightfoldJobs(await response.json(), board.boardUrl);
+    const parsed = parsePcsxPositions(await response.json(), board.boardUrl);
     if (parsed.length === 0) {
       break;
     }

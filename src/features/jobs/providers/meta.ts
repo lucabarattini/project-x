@@ -1,13 +1,28 @@
 import boards from "../../../../data/meta-boards.json";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
-export const metaBoards = boards as GreenhouseBoard[];
+type MetaBoard = GreenhouseBoard & {
+  sitemapUrl: string;
+};
 
-export type MetaJobSearchItem = {
-  id?: string;
+export const metaBoards = boards as MetaBoard[];
+
+export type MetaJobPostingLd = {
+  "@type"?: string;
   title?: string;
-  locations?: string[];
-  teams?: string[];
+  datePosted?: string;
+  employmentType?: string;
+  description?: string;
+  qualifications?: string;
+  responsibilities?: string;
+  jobLocation?: {
+    name?: string;
+    address?: {
+      addressLocality?: string;
+      addressRegion?: string;
+      addressCountry?: string;
+    };
+  }[];
 };
 
 export type ParsedMetaJob = {
@@ -16,155 +31,208 @@ export type ParsedMetaJob = {
   location: string;
   absoluteUrl: string;
   contentText: string;
-  postedAt: null;
+  postedAt: string | null;
 };
 
 /**
- * Normalizes the GraphQL `data.job_search` array (id, title, locations,
- * teams). The doc_id below is the one used by the careers SPA; Meta rotates
- * it periodically, so failures degrade to [] rather than throwing.
+ * Meta answers 400 to requests that do not look like a navigating browser,
+ * so every call — sitemap included — carries a full document header set.
  */
-export function parseMetaJobSearch(json: unknown): ParsedMetaJob[] {
-  const jobs = (json as { data?: { job_search?: unknown } } | null)?.data?.job_search;
-  if (!Array.isArray(jobs)) {
-    return [];
-  }
+const browserHeaders = {
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "accept-language": "en-US,en;q=0.9",
+  "sec-ch-ua": '"Chromium";v="139", "Not;A=Brand";v="99"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"macOS"',
+  "sec-fetch-dest": "document",
+  "sec-fetch-mode": "navigate",
+  "sec-fetch-site": "none",
+  "upgrade-insecure-requests": "1",
+  "user-agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+};
 
-  const parsed: ParsedMetaJob[] = [];
-  for (const job of jobs as MetaJobSearchItem[]) {
-    const id = typeof job.id === "string" ? job.id : "";
-    const title = typeof job.title === "string" ? job.title.trim() : "";
-    if (!id || !title) continue;
-
-    parsed.push({
-      id,
-      title,
-      location:
-        Array.isArray(job.locations) && job.locations.length > 0
-          ? job.locations.filter((item): item is string => typeof item === "string").join(" · ")
-          : "Not listed",
-      absoluteUrl: `https://www.metacareers.com/jobs/${id}`,
-      contentText:
-        Array.isArray(job.teams) && job.teams.length > 0
-          ? job.teams.filter((item): item is string => typeof item === "string").join(" ")
-          : "",
-      postedAt: null,
-    });
-  }
-
-  return parsed;
+function stripHtml(html = "") {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/giu, " ")
+    .replace(/<style[\s\S]*?<\/style>/giu, " ")
+    .replace(/<li[^>]*>/giu, " - ")
+    .replace(/<br\s*\/?>/giu, "\n")
+    .replace(/<\/(p|div|section|h2|h3|ul|ol)>/giu, "\n")
+    .replace(/<[^>]+>/gu, " ")
+    .replace(/&nbsp;/giu, " ")
+    .replace(/&amp;/giu, "&")
+    .replace(/&quot;/giu, "\"")
+    .replace(/&#39;/giu, "'")
+    .replace(/\s+/gu, " ")
+    .trim();
 }
 
 /**
- * Meta's careers SPA loads jobs through a GraphQL endpoint that requires the
- * page's `lsd` anti-CSRF token and a `datr` cookie, plus a rotating doc_id
- * (reference: kbhujbal/go-get-jobs). The flow is implemented best-effort and
- * degrades to [] whenever Meta rejects the request.
+ * Fans out over the postings and stops once the run deadline passes, so a
+ * slow window degrades to partial results rather than letting the caller's
+ * timeout discard everything already fetched.
+ */
+async function mapWithinDeadline<T, R>(
+  items: T[],
+  limit: number,
+  startedAt: number,
+  deadlineMs: number,
+  mapper: (item: T) => Promise<R>,
+) {
+  const results: R[] = [];
+  let index = 0;
+
+  async function worker() {
+    while (index < items.length) {
+      const current = items[index];
+      index += 1;
+      if (Date.now() - startedAt > deadlineMs) {
+        return;
+      }
+      results.push(await mapper(current));
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/**
+ * Pulls the job-detail URLs out of the sitemap named in metacareers'
+ * robots.txt. Every entry shares one <lastmod> (the sitemap build time), so
+ * the real posting date has to come from the detail page.
+ */
+export function parseMetaSitemap(xml: string): string[] {
+  const urls: string[] = [];
+  for (const block of xml.match(/<url>[\s\S]*?<\/url>/giu) ?? []) {
+    const url = block.match(/<loc>([^<]+)<\/loc>/iu)?.[1];
+    if (url && /\/job_details\//u.test(url)) {
+      urls.push(url);
+    }
+  }
+  return urls;
+}
+
+/**
+ * Reads the JobPosting JSON-LD block Meta renders into every job page. The
+ * GraphQL feed behind the careers SPA needs a per-session `lsd` token plus a
+ * doc_id that Meta rotates; the structured-data block carries the same
+ * fields, including a real `datePosted`, and does not move.
+ */
+export function parseMetaJobPage(html: string, url: string): ParsedMetaJob | null {
+  let posting: MetaJobPostingLd | null = null;
+  for (const block of html.match(
+    /<script[^>]*type="application\/ld\+json"[^>]*>[\s\S]*?<\/script>/giu,
+  ) ?? []) {
+    const json = block.replace(/^<script[^>]*>/iu, "").replace(/<\/script>$/iu, "");
+    try {
+      const parsed = JSON.parse(json) as MetaJobPostingLd;
+      if (parsed?.["@type"] === "JobPosting") {
+        posting = parsed;
+        break;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  const title = posting?.title?.trim() ?? "";
+  if (!title) {
+    return null;
+  }
+
+  const locations = (posting?.jobLocation ?? [])
+    .map((place) => {
+      const address = place?.address;
+      const parts = [
+        address?.addressLocality || place?.name || "",
+        address?.addressRegion || "",
+        address?.addressCountry || "",
+      ]
+        .map((part) => part.trim())
+        .filter(Boolean);
+      return [...new Set(parts)].join(", ");
+    })
+    .filter(Boolean);
+
+  const postedAt = Date.parse(posting?.datePosted ?? "");
+
+  return {
+    id: url.match(/job_details\/(\d+)/u)?.[1] ?? url,
+    title,
+    location: [...new Set(locations)].join(" · ") || "Not listed",
+    absoluteUrl: url,
+    contentText: stripHtml(
+      [posting?.description, posting?.responsibilities, posting?.qualifications]
+        .filter(Boolean)
+        .join(" "),
+    ),
+    postedAt: Number.isNaN(postedAt) ? null : new Date(postedAt).toISOString(),
+  };
+}
+
+/**
+ * Crawls the sitemap, then reads each posting's structured data. The sitemap
+ * lists ~870 openings and gives no ordering signal, so `maxJobs` decides how
+ * much of it is covered per run: one detail fetch per posting is the price of
+ * a real `datePosted`.
  */
 export async function fetchLatestMetaJobs(options: { maxJobs?: number } = {}) {
-  const { maxJobs = 120 } = options;
+  const { maxJobs = 240 } = options;
   const board = metaBoards[0];
-  const pageSize = 10;
-  const jobs: GreenhouseJob[] = [];
+  // Wall-clock budget for the whole run, comfortably inside the caller's 30s
+  // provider timeout.
+  const startedAt = Date.now();
+  const runDeadlineMs = 24_000;
 
-  // 1. Visit the careers page to obtain the lsd token and datr cookie.
-  let pageResponse: Response;
-  try {
-    pageResponse = await fetch("https://www.metacareers.com/jobs/", {
-      signal: AbortSignal.timeout(10_000),
-      headers: {
-        "user-agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-      },
-    });
-  } catch {
-    return jobs;
-  }
-  if (!pageResponse.ok) {
-    return jobs;
+  // Lower concurrency in serverless: Meta is quick to reject bursts from
+  // datacenter IPs, and a rejected page costs the whole posting.
+  const detailConcurrency = process.env.VERCEL === "1" ? 8 : 16;
+
+  const sitemapResponse = await fetch(board.sitemapUrl, {
+    next: { revalidate: 300 },
+    signal: AbortSignal.timeout(15_000),
+    headers: browserHeaders,
+  });
+  if (!sitemapResponse.ok) {
+    throw new Error(`Meta sitemap returned ${sitemapResponse.status}`);
   }
 
-  const html = await pageResponse.text();
-  const lsd =
-    html.match(/"LSD",\[\],\{"token":"([a-zA-Z0-9]+)"/u)?.[1] ??
-    html.match(/name="lsd" value="([a-zA-Z0-9]+)"/u)?.[1];
-  const datr = (pageResponse.headers.getSetCookie?.() ?? [])
-    .map((cookie) => cookie.split(";")[0])
-    .find((cookie) => cookie.startsWith("datr="))
-    ?.slice("datr=".length);
+  const urls = parseMetaSitemap(await sitemapResponse.text()).slice(0, maxJobs);
 
-  if (!lsd || !datr) {
-    return jobs;
-  }
+  const jobs = await mapWithinDeadline<string, GreenhouseJob | null>(
+    urls,
+    detailConcurrency,
+    startedAt,
+    runDeadlineMs,
+    async (url): Promise<GreenhouseJob | null> => {
+      try {
+        const response = await fetch(url, {
+          next: { revalidate: 300 },
+          signal: AbortSignal.timeout(10_000),
+          headers: browserHeaders,
+        });
+        if (!response.ok) {
+          return null;
+        }
 
-  // 2. Query the GraphQL endpoint page by page.
-  for (let page = 1; page <= Math.ceil(maxJobs / pageSize); page += 1) {
-    const variables = JSON.stringify({
-      search_input: {
-        q: "",
-        divisions: [],
-        offices: ["North America"],
-        roles: [],
-        leadership_levels: ["Individual Contributor"],
-        saved_jobs: [],
-        saved_searches: [],
-        sub_teams: [],
-        teams: [],
-        is_leadership: false,
-        is_remote_only: false,
-        sort_by_new: true,
-        page,
-        results_per_page: pageSize,
-      },
-    });
+        const parsed = parseMetaJobPage(await response.text(), url);
+        if (!parsed) {
+          return null;
+        }
 
-    let response: Response;
-    try {
-      response = await fetch(board.apiUrl, {
-        method: "POST",
-        next: { revalidate: 300 },
-        signal: AbortSignal.timeout(10_000),
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          "user-agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-          origin: "https://www.metacareers.com",
-          referer: "https://www.metacareers.com/jobs/",
-          cookie: `datr=${datr}`,
-        },
-        body: new URLSearchParams({
-          lsd,
-          variables,
-          doc_id: "9114524511922157",
-          fb_api_caller_class: "RelayModern",
-          fb_api_req_friendly_name: "useFusionJobsListQuery",
-        }).toString(),
-      });
-    } catch {
-      break;
-    }
-    if (!response.ok) {
-      break;
-    }
+        return {
+          ...parsed,
+          company: board.company,
+          boardToken: board.token,
+          updatedAt: null,
+        };
+      } catch {
+        return null;
+      }
+    },
+  );
 
-    const parsed = parseMetaJobSearch(await response.json());
-    if (parsed.length === 0) {
-      break;
-    }
-
-    jobs.push(
-      ...parsed.map((job) => ({
-        ...job,
-        company: board.company,
-        boardToken: board.token,
-        updatedAt: null,
-      })),
-    );
-
-    if (parsed.length < pageSize || jobs.length >= maxJobs) {
-      break;
-    }
-  }
-
-  return jobs;
+  return jobs.filter((job): job is GreenhouseJob => job !== null);
 }
