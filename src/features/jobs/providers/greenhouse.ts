@@ -136,6 +136,10 @@ async function fetchJobDetailsWithinDeadline(
   const detailed: GreenhouseJob[] = [];
   let index = 0;
 
+  // Lower concurrency in serverless so the burst of embed-page requests is
+  // less likely to trip Greenhouse's datacenter-IP rate limiter.
+  const workerCount = process.env.VERCEL === "1" ? 8 : 12;
+
   async function worker() {
     while (index < jobs.length) {
       const current = jobs[index];
@@ -149,7 +153,7 @@ async function fetchJobDetailsWithinDeadline(
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(12, jobs.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(workerCount, jobs.length) }, worker));
   return detailed;
 }
 
@@ -163,7 +167,11 @@ export async function fetchLatestGreenhouseJobs(
   const startedAt = Date.now();
   const runDeadlineMs = 24_000;
 
-  const results = await mapWithConcurrency(greenhouseBoards, 12, async (board) => {
+  // Lower board concurrency in serverless to shrink the simultaneous-request
+  // burst that datacenter IPs get rate-limited on.
+  const boardConcurrency = process.env.VERCEL === "1" ? 8 : 12;
+
+  const results = await mapWithConcurrency(greenhouseBoards, boardConcurrency, async (board) => {
     try {
       const response = await fetch(board.apiUrl, {
         next: { revalidate: 300 },

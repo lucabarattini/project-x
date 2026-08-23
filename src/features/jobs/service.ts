@@ -71,7 +71,18 @@ type FetchJobsOptions = {
   greenhouseDetailLimit?: number;
 };
 
-const snapshotTtlMs = 300 * 1000;
+/**
+ * Serverless (Vercel) builds run on cloud IPs that the ATS APIs throttle
+ * harder than home/office IPs, inside a function with a short wall-clock
+ * limit. The snapshot rebuilds less often there (fewer request bursts) and
+ * the Greenhouse detail enrichment is cut in half (its 41-board + 120-detail
+ * fan-out is the main rate-limit trigger).
+ */
+const isServerless = process.env.VERCEL === "1";
+const snapshotRevalidateSeconds = isServerless ? 600 : 300;
+const greenhouseDetailLimit = isServerless ? 60 : 120;
+
+const snapshotTtlMs = snapshotRevalidateSeconds * 1000;
 
 /**
  * Hard ceiling on how stale a persisted snapshot may be before it is refused.
@@ -152,7 +163,7 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
     {
       provider: "greenhouse",
       timeoutMs: 30_000,
-      run: () => fetchLatestGreenhouseJobs({ detailLimit: options.greenhouseDetailLimit ?? 120 }),
+      run: () => fetchLatestGreenhouseJobs({ detailLimit: options.greenhouseDetailLimit ?? greenhouseDetailLimit }),
     },
     {
       provider: "ashby",
@@ -265,7 +276,7 @@ const getSnapshotChunk = unstable_cache(
     };
   },
   ["job-snapshot-chunk-v13"],
-  { revalidate: 300 },
+  { revalidate: snapshotRevalidateSeconds },
 );
 
 let moduleSnapshot: JobSnapshot | null = null;
@@ -365,7 +376,7 @@ const getAmazonLiveEntries = unstable_cache(
     }
   },
   ["amazon-live-query-v1"],
-  { revalidate: 300 },
+  { revalidate: snapshotRevalidateSeconds },
 );
 
 /**

@@ -1,6 +1,9 @@
 import { getSnapshot, getAugmentedEntries } from "@/features/jobs/service";
 import { decodeCursor, parseSearchParams, searchJobs } from "@/features/jobs/search";
 
+// Cold snapshot builds can run longer than Vercel's default function limit.
+export const maxDuration = 60;
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const params = parseSearchParams(Object.fromEntries(url.searchParams));
