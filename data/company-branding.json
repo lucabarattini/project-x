@@ -1,89 +1,370 @@
 {
-  "Anthropic": { "domain": "anthropic.com", "logoPath": "/company-logos/anthropic.png" },
-  "Amazon": { "domain": "amazon.jobs", "logoPath": "/company-logos/amazon.png" },
-  "Black Forest Labs": { "domain": "blackforestlabs.ai", "logoPath": "/company-logos/blackforestlabs.png" },
-  "Databricks": { "domain": "databricks.com", "logoPath": "/company-logos/databricks.png" },
-  "Google": { "domain": "google.com", "logoPath": "/company-logos/google.svg" },
-  "Glean": { "domain": "glean.com", "logoPath": "/company-logos/glean.png" },
-  "HeyGen": { "domain": "heygen.com", "logoPath": "/company-logos/heygen.png" },
-  "Lovable": { "domain": "lovable.dev", "logoPath": "/company-logos/lovable.png" },
-  "Together AI": { "domain": "together.ai", "logoPath": "/company-logos/togetherai.png" },
-  "World Labs": { "domain": "worldlabs.ai", "logoPath": "/company-logos/worldlabs.png" },
-  "Jane Street": { "domain": "janestreet.com", "logoPath": "/company-logos/janestreet.png" },
-  "Optiver": { "domain": "optiver.com", "logoPath": "/company-logos/optiver.png" },
-  "IMC": { "domain": "imc.com", "logoPath": "/company-logos/imc.png" },
-  "Roblox": { "domain": "roblox.com", "logoPath": "/company-logos/roblox.png" },
-  "Airbnb": { "domain": "airbnb.com", "logoPath": "/company-logos/airbnb.png" },
-  "Block": { "domain": "block.xyz", "logoPath": "/company-logos/block.png" },
-  "Stripe": { "domain": "stripe.com", "logoPath": "/company-logos/stripe.png" },
-  "Coinbase": { "domain": "coinbase.com", "logoPath": "/company-logos/coinbase.png" },
-  "Asana": { "domain": "asana.com", "logoPath": "/company-logos/asana.png" },
-  "Coupang": { "domain": "coupang.com", "logoPath": "/company-logos/coupang.png" },
-  "Datadog": { "domain": "datadoghq.com", "logoPath": "/company-logos/datadog.png" },
-  "Figma": { "domain": "figma.com", "logoPath": "/company-logos/figma.png" },
-  "Discord": { "domain": "discord.com", "logoPath": "/company-logos/discord.png" },
-  "Robinhood": { "domain": "robinhood.com", "logoPath": "/company-logos/robinhood.png" },
-  "Cloudflare": { "domain": "cloudflare.com", "logoPath": "/company-logos/cloudflare.png" },
-  "Lyft": { "domain": "lyft.com", "logoPath": "/company-logos/lyft.png" },
-  "Twitch": { "domain": "twitch.tv", "logoPath": "/company-logos/twitch.png" },
-  "AppLovin": { "domain": "applovin.com", "logoPath": "/company-logos/applovin.png" },
-  "TCS": { "domain": "tcs.com", "logoPath": "/company-logos/tcs.png" },
-  "PDT Partners": { "domain": "pdtpartners.com", "logoPath": "/company-logos/pdtpartners.png" },
-  "Point72": { "domain": "point72.com", "logoPath": "/company-logos/point72.png" },
-  "Jump Trading": { "domain": "jumptrading.com", "logoPath": "/company-logos/jumptrading.png" },
-  "Quadrature Capital": { "domain": "quadrature.ai", "logoPath": "/company-logos/quadraturecapital.png" },
-  "Virtu Financial": { "domain": "virtu.com", "logoPath": "/company-logos/virtufinancial.png" },
-  "Tower Research Capital": { "domain": "tower-research.com", "logoPath": "/company-logos/towerresearchcapital.png" },
-  "AQR": { "domain": "aqr.com", "logoPath": "/company-logos/aqr.png" },
-  "Radix Trading": { "domain": "radixtrading.com", "logoPath": "/company-logos/radixtrading.png" },
-  "Five Rings": { "domain": "fiverings.com", "logoPath": "/company-logos/fiverings.png" },
-  "DRW": { "domain": "drw.com", "logoPath": "/company-logos/drw.png" },
-  "TGS Management": { "domain": "tgsmc.com", "logoPath": "/company-logos/tgsmanagement.png" },
-  "Arrowstreet Capital": { "domain": "arrowstreetcapital.com", "logoPath": "/company-logos/arrowstreetcapital.png" },
-  "Abridge": { "domain": "abridge.com", "logoPath": "/company-logos/abridge.png" },
-  "Applied Intuition": { "domain": "appliedintuition.com", "logoPath": "/company-logos/appliedintuition.png" },
-  "Baseten": { "domain": "baseten.co", "logoPath": "/company-logos/baseten.png" },
-  "Chai Discovery": { "domain": "chaidiscovery.com", "logoPath": "/company-logos/chaidiscovery.png" },
-  "Clay": { "domain": "clay.com", "logoPath": "/company-logos/clay.png" },
-  "Cognition": { "domain": "cognition.ai", "logoPath": "/company-logos/cognition.png" },
-  "Cohere": { "domain": "cohere.com", "logoPath": "/company-logos/cohere.png" },
-  "Crusoe": { "domain": "crusoe.ai", "logoPath": "/company-logos/crusoe.png" },
-  "Cursor": { "domain": "cursor.com", "logoPath": "/company-logos/cursor.png" },
-  "Decagon": { "domain": "decagon.ai", "logoPath": "/company-logos/decagon.png" },
-  "ElevenLabs": { "domain": "elevenlabs.io", "logoPath": "/company-logos/elevenlabs.png" },
-  "EliseAI": { "domain": "eliseai.com", "logoPath": "/company-logos/eliseai.png" },
-  "Harvey": { "domain": "harvey.ai", "logoPath": "/company-logos/harvey.png" },
-  "Fal": { "domain": "fal.ai", "logoPath": "/company-logos/fal.png" },
-  "Fireworks AI": { "domain": "fireworks.ai", "logoPath": "/company-logos/fireworksai.png" },
-  "Gamma": { "domain": "gamma.app", "logoPath": "/company-logos/gamma.png" },
-  "Genspark.ai": { "domain": "genspark.ai", "logoPath": "/company-logos/gensparkai.png" },
-  "Krea": { "domain": "krea.ai", "logoPath": "/company-logos/krea.png" },
-  "Legora": { "domain": "legora.com", "logoPath": "/company-logos/legora.png" },
-  "Listen Labs": { "domain": "listenlabs.ai", "logoPath": "/company-logos/listenlabs.png" },
-  "Mercor": { "domain": "mercor.com", "logoPath": "/company-logos/mercor.png" },
-  "Midjourney": { "domain": "midjourney.com", "logoPath": "/company-logos/midjourney.png" },
-  "Mistral AI": { "domain": "mistral.ai", "logoPath": "/company-logos/mistralai.png" },
-  "Notion": { "domain": "notion.com", "logoPath": "/company-logos/notion.png" },
-  "OpenAI": { "domain": "openai.com", "logoPath": "/company-logos/openai.png" },
-  "OpenEvidence": { "domain": "openevidence.com", "logoPath": "/company-logos/openevidence.png" },
-  "Perplexity": { "domain": "perplexity.ai", "logoPath": "/company-logos/perplexity.png" },
-  "Physical Intelligence": { "domain": "physicalintelligence.company", "logoPath": "/company-logos/physicalintelligence.png" },
-  "Replit": { "domain": "replit.com", "logoPath": "/company-logos/replit.png" },
-  "Reflection": { "domain": "reflection.ai", "logoPath": "/company-logos/reflection.png" },
-  "Rogo": { "domain": "rogo.ai", "logoPath": "/company-logos/rogo.png" },
-  "Safe Superintelligence": { "domain": "ssi.inc", "logoPath": "/company-logos/safesuperintelligence.png" },
-  "Sierra": { "domain": "sierra.ai", "logoPath": "/company-logos/sierra.png" },
-  "SambaNova": { "domain": "sambanova.ai", "logoPath": "/company-logos/sambanova.png" },
-  "Skild AI": { "domain": "skild.ai", "logoPath": "/company-logos/skildai.png" },
-  "Speak": { "domain": "speak.com", "logoPath": "/company-logos/speak.png" },
-  "Suno": { "domain": "suno.com", "logoPath": "/company-logos/suno.png" },
-  "Surge AI": { "domain": "surgehq.ai", "logoPath": "/company-logos/surgeai.png" },
-  "Synthesia": { "domain": "synthesia.io", "logoPath": "/company-logos/synthesia.png" },
-  "Thinking Machines Lab": { "domain": "thinkingmachines.ai", "logoPath": "/company-logos/thinkingmachineslab.png" },
-  "Voleon": { "domain": "voleon.com", "logoPath": "/company-logos/voleon.png" },
-  "Wispr Flow": { "domain": "wisprflow.ai", "logoPath": "/company-logos/wisprflow.png" },
-  "Cyera": { "domain": "cyera.com", "logoPath": "/company-logos/cyera.png" },
-  "Renaissance Technologies": { "domain": "rentec.com", "logoPath": "/company-logos/renaissance-technologies.png" },
-  "Susquehanna International Group": { "domain": "sig.com", "logoPath": "/company-logos/sig.png" },
-  "XTX Markets": { "domain": "xtxmarkets.com", "logoPath": "/company-logos/xtxmarkets.png" }
+  "Anthropic": {
+    "domain": "anthropic.com",
+    "logoPath": "/company-logos/anthropic.png"
+  },
+  "Amazon": {
+    "domain": "amazon.jobs",
+    "logoPath": "/company-logos/amazon.png"
+  },
+  "Black Forest Labs": {
+    "domain": "blackforestlabs.ai",
+    "logoPath": "/company-logos/blackforestlabs.png"
+  },
+  "Databricks": {
+    "domain": "databricks.com",
+    "logoPath": "/company-logos/databricks.png"
+  },
+  "Google": {
+    "domain": "google.com",
+    "logoPath": "/company-logos/google.svg"
+  },
+  "Glean": {
+    "domain": "glean.com",
+    "logoPath": "/company-logos/glean.png"
+  },
+  "HeyGen": {
+    "domain": "heygen.com",
+    "logoPath": "/company-logos/heygen.png"
+  },
+  "Lovable": {
+    "domain": "lovable.dev",
+    "logoPath": "/company-logos/lovable.png"
+  },
+  "Together AI": {
+    "domain": "together.ai",
+    "logoPath": "/company-logos/togetherai.png"
+  },
+  "World Labs": {
+    "domain": "worldlabs.ai",
+    "logoPath": "/company-logos/worldlabs.png"
+  },
+  "Jane Street": {
+    "domain": "janestreet.com",
+    "logoPath": "/company-logos/janestreet.png"
+  },
+  "Optiver": {
+    "domain": "optiver.com",
+    "logoPath": "/company-logos/optiver.png"
+  },
+  "IMC": {
+    "domain": "imc.com",
+    "logoPath": "/company-logos/imc.png"
+  },
+  "Roblox": {
+    "domain": "roblox.com",
+    "logoPath": "/company-logos/roblox.png"
+  },
+  "Airbnb": {
+    "domain": "airbnb.com",
+    "logoPath": "/company-logos/airbnb.png"
+  },
+  "Block": {
+    "domain": "block.xyz",
+    "logoPath": "/company-logos/block.png"
+  },
+  "Stripe": {
+    "domain": "stripe.com",
+    "logoPath": "/company-logos/stripe.png"
+  },
+  "Coinbase": {
+    "domain": "coinbase.com",
+    "logoPath": "/company-logos/coinbase.png"
+  },
+  "Asana": {
+    "domain": "asana.com",
+    "logoPath": "/company-logos/asana.png"
+  },
+  "Coupang": {
+    "domain": "coupang.com",
+    "logoPath": "/company-logos/coupang.png"
+  },
+  "Datadog": {
+    "domain": "datadoghq.com",
+    "logoPath": "/company-logos/datadog.png"
+  },
+  "Figma": {
+    "domain": "figma.com",
+    "logoPath": "/company-logos/figma.png"
+  },
+  "Discord": {
+    "domain": "discord.com",
+    "logoPath": "/company-logos/discord.png"
+  },
+  "Robinhood": {
+    "domain": "robinhood.com",
+    "logoPath": "/company-logos/robinhood.png"
+  },
+  "Cloudflare": {
+    "domain": "cloudflare.com",
+    "logoPath": "/company-logos/cloudflare.png"
+  },
+  "Lyft": {
+    "domain": "lyft.com",
+    "logoPath": "/company-logos/lyft.png"
+  },
+  "Twitch": {
+    "domain": "twitch.tv",
+    "logoPath": "/company-logos/twitch.png"
+  },
+  "AppLovin": {
+    "domain": "applovin.com",
+    "logoPath": "/company-logos/applovin.png"
+  },
+  "TCS": {
+    "domain": "tcs.com",
+    "logoPath": "/company-logos/tcs.png"
+  },
+  "PDT Partners": {
+    "domain": "pdtpartners.com",
+    "logoPath": "/company-logos/pdtpartners.png"
+  },
+  "Point72": {
+    "domain": "point72.com",
+    "logoPath": "/company-logos/point72.png"
+  },
+  "Jump Trading": {
+    "domain": "jumptrading.com",
+    "logoPath": "/company-logos/jumptrading.png"
+  },
+  "Quadrature Capital": {
+    "domain": "quadrature.ai",
+    "logoPath": "/company-logos/quadraturecapital.png"
+  },
+  "Virtu Financial": {
+    "domain": "virtu.com",
+    "logoPath": "/company-logos/virtufinancial.png"
+  },
+  "Tower Research Capital": {
+    "domain": "tower-research.com",
+    "logoPath": "/company-logos/towerresearchcapital.png"
+  },
+  "AQR": {
+    "domain": "aqr.com",
+    "logoPath": "/company-logos/aqr.png"
+  },
+  "Radix Trading": {
+    "domain": "radixtrading.com",
+    "logoPath": "/company-logos/radixtrading.png"
+  },
+  "Five Rings": {
+    "domain": "fiverings.com",
+    "logoPath": "/company-logos/fiverings.png"
+  },
+  "DRW": {
+    "domain": "drw.com",
+    "logoPath": "/company-logos/drw.png"
+  },
+  "TGS Management": {
+    "domain": "tgsmc.com",
+    "logoPath": "/company-logos/tgsmanagement.png"
+  },
+  "Arrowstreet Capital": {
+    "domain": "arrowstreetcapital.com",
+    "logoPath": "/company-logos/arrowstreetcapital.png"
+  },
+  "Abridge": {
+    "domain": "abridge.com",
+    "logoPath": "/company-logos/abridge.png"
+  },
+  "Applied Intuition": {
+    "domain": "appliedintuition.com",
+    "logoPath": "/company-logos/appliedintuition.png"
+  },
+  "Baseten": {
+    "domain": "baseten.co",
+    "logoPath": "/company-logos/baseten.png"
+  },
+  "Chai Discovery": {
+    "domain": "chaidiscovery.com",
+    "logoPath": "/company-logos/chaidiscovery.png"
+  },
+  "Clay": {
+    "domain": "clay.com",
+    "logoPath": "/company-logos/clay.png"
+  },
+  "Cognition": {
+    "domain": "cognition.ai",
+    "logoPath": "/company-logos/cognition.png"
+  },
+  "Cohere": {
+    "domain": "cohere.com",
+    "logoPath": "/company-logos/cohere.png"
+  },
+  "Crusoe": {
+    "domain": "crusoe.ai",
+    "logoPath": "/company-logos/crusoe.png"
+  },
+  "Cursor": {
+    "domain": "cursor.com",
+    "logoPath": "/company-logos/cursor.png"
+  },
+  "Decagon": {
+    "domain": "decagon.ai",
+    "logoPath": "/company-logos/decagon.png"
+  },
+  "ElevenLabs": {
+    "domain": "elevenlabs.io",
+    "logoPath": "/company-logos/elevenlabs.png"
+  },
+  "EliseAI": {
+    "domain": "eliseai.com",
+    "logoPath": "/company-logos/eliseai.png"
+  },
+  "Harvey": {
+    "domain": "harvey.ai",
+    "logoPath": "/company-logos/harvey.png"
+  },
+  "Fal": {
+    "domain": "fal.ai",
+    "logoPath": "/company-logos/fal.png"
+  },
+  "Fireworks AI": {
+    "domain": "fireworks.ai",
+    "logoPath": "/company-logos/fireworksai.png"
+  },
+  "Gamma": {
+    "domain": "gamma.app",
+    "logoPath": "/company-logos/gamma.png"
+  },
+  "Genspark.ai": {
+    "domain": "genspark.ai",
+    "logoPath": "/company-logos/gensparkai.png"
+  },
+  "Krea": {
+    "domain": "krea.ai",
+    "logoPath": "/company-logos/krea.png"
+  },
+  "Legora": {
+    "domain": "legora.com",
+    "logoPath": "/company-logos/legora.png"
+  },
+  "Listen Labs": {
+    "domain": "listenlabs.ai",
+    "logoPath": "/company-logos/listenlabs.png"
+  },
+  "Mercor": {
+    "domain": "mercor.com",
+    "logoPath": "/company-logos/mercor.png"
+  },
+  "Midjourney": {
+    "domain": "midjourney.com",
+    "logoPath": "/company-logos/midjourney.png"
+  },
+  "Mistral AI": {
+    "domain": "mistral.ai",
+    "logoPath": "/company-logos/mistralai.png"
+  },
+  "Notion": {
+    "domain": "notion.com",
+    "logoPath": "/company-logos/notion.png"
+  },
+  "OpenAI": {
+    "domain": "openai.com",
+    "logoPath": "/company-logos/openai.png"
+  },
+  "OpenEvidence": {
+    "domain": "openevidence.com",
+    "logoPath": "/company-logos/openevidence.png"
+  },
+  "Perplexity": {
+    "domain": "perplexity.ai",
+    "logoPath": "/company-logos/perplexity.png"
+  },
+  "Physical Intelligence": {
+    "domain": "physicalintelligence.company",
+    "logoPath": "/company-logos/physicalintelligence.png"
+  },
+  "Replit": {
+    "domain": "replit.com",
+    "logoPath": "/company-logos/replit.png"
+  },
+  "Reflection": {
+    "domain": "reflection.ai",
+    "logoPath": "/company-logos/reflection.png"
+  },
+  "Rogo": {
+    "domain": "rogo.ai",
+    "logoPath": "/company-logos/rogo.png"
+  },
+  "Safe Superintelligence": {
+    "domain": "ssi.inc",
+    "logoPath": "/company-logos/safesuperintelligence.png"
+  },
+  "Sierra": {
+    "domain": "sierra.ai",
+    "logoPath": "/company-logos/sierra.png"
+  },
+  "SambaNova": {
+    "domain": "sambanova.ai",
+    "logoPath": "/company-logos/sambanova.png"
+  },
+  "Skild AI": {
+    "domain": "skild.ai",
+    "logoPath": "/company-logos/skildai.png"
+  },
+  "Speak": {
+    "domain": "speak.com",
+    "logoPath": "/company-logos/speak.png"
+  },
+  "Suno": {
+    "domain": "suno.com",
+    "logoPath": "/company-logos/suno.png"
+  },
+  "Surge AI": {
+    "domain": "surgehq.ai",
+    "logoPath": "/company-logos/surgeai.png"
+  },
+  "Synthesia": {
+    "domain": "synthesia.io",
+    "logoPath": "/company-logos/synthesia.png"
+  },
+  "Thinking Machines Lab": {
+    "domain": "thinkingmachines.ai",
+    "logoPath": "/company-logos/thinkingmachineslab.png"
+  },
+  "Voleon": {
+    "domain": "voleon.com",
+    "logoPath": "/company-logos/voleon.png"
+  },
+  "Wispr Flow": {
+    "domain": "wisprflow.ai",
+    "logoPath": "/company-logos/wisprflow.png"
+  },
+  "Cyera": {
+    "domain": "cyera.com",
+    "logoPath": "/company-logos/cyera.png"
+  },
+  "Renaissance Technologies": {
+    "domain": "rentec.com",
+    "logoPath": "/company-logos/renaissance-technologies.png"
+  },
+  "Susquehanna International Group": {
+    "domain": "sig.com",
+    "logoPath": "/company-logos/sig.png"
+  },
+  "XTX Markets": {
+    "domain": "xtxmarkets.com",
+    "logoPath": "/company-logos/xtxmarkets.png"
+  },
+  "Apple": {
+    "domain": "apple.com",
+    "logoPath": "/company-logos/apple.png"
+  },
+  "Microsoft": {
+    "domain": "microsoft.com",
+    "logoPath": "/company-logos/microsoft.png"
+  },
+  "Meta": {
+    "domain": "meta.com",
+    "logoPath": "/company-logos/meta.png"
+  },
+  "Expedia Group": {
+    "domain": "expediagroup.com",
+    "logoPath": "/company-logos/expediagroup.png"
+  },
+  "Zillow": {
+    "domain": "zillow.com",
+    "logoPath": "/company-logos/zillow.png"
+  }
 }

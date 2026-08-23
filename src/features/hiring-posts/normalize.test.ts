@@ -230,14 +230,14 @@ test("classifies common non-engineering recruiter roles instead of sending them 
   assert.ok((post?.score ?? 101) <= 100);
 });
 
-test("deduplicates repeated posts and removes records older than seven days", () => {
+test("deduplicates repeated posts and removes records past the retention window", () => {
   const first = normalizeHiringPost(rawPost(), now);
   const duplicate = normalizeHiringPost(rawPost({ id: "post-2" }), now);
   const old = normalizeHiringPost(rawPost({
     id: "post-old",
     linkedinUrl: "https://www.linkedin.com/posts/post-old",
     content: "My team is hiring a Finance Manager in Seattle, WA.",
-    postedAt: { date: "2026-08-06T20:00:00.000Z" },
+    postedAt: { date: "2026-07-20T20:00:00.000Z" },
   }), now);
   assert.ok(first && duplicate && old);
 
@@ -255,6 +255,25 @@ test("deduplicates repeated posts and removes records older than seven days", ()
     now,
   });
   assert.equal(repeated, feed);
+});
+
+test("feed merge keeps posts inside the 21-day retention window", () => {
+  // 8 days old: pruned under the old 7-day retention, kept now that the
+  // dashboard offers 14- and 21-day windows.
+  const eightDaysOld = normalizeHiringPost(rawPost({
+    id: "post-8d",
+    linkedinUrl: "https://www.linkedin.com/posts/post-8d",
+    content: "My team is hiring a Finance Manager in Seattle, WA.",
+    postedAt: { date: "2026-08-06T20:00:00.000Z" },
+  }), now);
+  assert.ok(eightDaysOld);
+
+  const feed = mergeHiringPostFeed(emptyHiringPostFeed(), [eightDaysOld], {
+    runId: "run-retention",
+    rawCount: 1,
+    now,
+  });
+  assert.equal(feed.posts.length, 1);
 });
 
 test("feed merge keeps an author photo when a re-ingested copy has none", () => {

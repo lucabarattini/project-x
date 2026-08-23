@@ -108,7 +108,7 @@ async function fetchFavicon(domain) {
   const faviconUrl = `https://www.google.com/s2/favicons?domain_url=https://${encodeURIComponent(normalizedDomain)}&sz=128`;
   const response = await fetch(faviconUrl, {
     headers: {
-      "user-agent": "ABetterLinkedInLogoFetcher/1.0",
+      "user-agent": "ProjectXLogoFetcher/1.0",
     },
   });
 
@@ -136,7 +136,7 @@ async function fetchOfficialIcon(domain) {
   const response = await fetch(homeUrl, {
     redirect: "follow",
     headers: {
-      "user-agent": "Mozilla/5.0 ABetterLinkedInLogoFetcher/1.0",
+      "user-agent": "Mozilla/5.0 ProjectXLogoFetcher/1.0",
     },
   }).catch(() => null);
 
@@ -156,7 +156,7 @@ async function fetchOfficialIcon(domain) {
     const iconResponse = await fetch(iconUrl, {
       redirect: "follow",
       headers: {
-        "user-agent": "Mozilla/5.0 ABetterLinkedInLogoFetcher/1.0",
+        "user-agent": "Mozilla/5.0 ProjectXLogoFetcher/1.0",
       },
     }).catch(() => null);
 

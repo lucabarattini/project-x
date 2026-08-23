@@ -18,7 +18,7 @@ type Props = {
   updatedAt: string | null;
 };
 
-type AgeFilter = "today" | "24h" | "3d" | "7d";
+type AgeFilter = "today" | "24h" | "3d" | "7d" | "14d" | "21d";
 type InboxView = "queue" | "contacted" | "hidden";
 type SignalAudience = "all" | "technical" | "non-technical";
 type RegionFilter = "us" | "all";
@@ -29,12 +29,16 @@ const ageMilliseconds: Record<Exclude<AgeFilter, "today">, number> = {
   "24h": 24 * 60 * 60 * 1000,
   "3d": 3 * 24 * 60 * 60 * 1000,
   "7d": 7 * 24 * 60 * 60 * 1000,
+  "14d": 14 * 24 * 60 * 60 * 1000,
+  "21d": 21 * 24 * 60 * 60 * 1000,
 };
 
 const ageFilterLabels: Record<Exclude<AgeFilter, "today">, string> = {
   "24h": "24 hours",
   "3d": "3 days",
   "7d": "7 days",
+  "14d": "14 days",
+  "21d": "21 days",
 };
 
 /**
@@ -305,7 +309,7 @@ export function HiringPostDashboard({
       && textMatches;
   }
 
-  const ageCandidates: AgeFilter[] = ["today", "24h", "3d", "7d"];
+  const ageCandidates: AgeFilter[] = ["today", "24h", "3d", "7d", "14d", "21d"];
   const ageCounts = useMemo(() => {
     const countsByAge = new Map<AgeFilter, number>();
     for (const candidate of ageCandidates) {
@@ -516,6 +520,8 @@ export function HiringPostDashboard({
               <option value="24h">Last 24 hours</option>
               <option value="3d">Last 3 days</option>
               <option value="7d">Last 7 days</option>
+              <option value="14d">Last 14 days</option>
+              <option value="21d">Last 21 days</option>
             </select>
           </label>
         </div>

@@ -1,7 +1,9 @@
 import { normalizedContentBody, normalizedContentFingerprint } from "./normalize";
 import type { HiringPost, HiringPostFeed } from "./types";
 
-const retentionMs = 7 * 24 * 60 * 60 * 1000;
+// Must stay at or above the widest window the dashboard offers: posts are
+// pruned here at ingest, so a 21-day filter over a 7-day feed shows nothing.
+const retentionMs = 21 * 24 * 60 * 60 * 1000;
 
 export function emptyHiringPostFeed(): HiringPostFeed {
   return {

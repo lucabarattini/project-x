@@ -374,3 +374,34 @@ test("matchesRoleTypeFilter uses the positive technical taxonomy", () => {
   assert.equal(matchesRoleTypeFilter("Account Executive", "Software Engineering"), false);
   assert.equal(matchesRoleTypeFilter("Localization Specialist", "Needs Review"), true);
 });
+
+test("security titles classify as Security Engineering even when named 'Analyst'", () => {
+  // Reported from the live feed: "Cyber Threat Intelligence Analyst III" fell
+  // through to Non-Technical because the rule only matched the literal words
+  // "security"/"cybersecurity", so "cyber" and "threat intelligence" missed.
+  for (const title of [
+    "Cyber Threat Intelligence Analyst III",
+    "Threat Intelligence Analyst",
+    "Detection and Response Engineer",
+    "Incident Response Analyst",
+    "Penetration Tester",
+    "Vulnerability Management Analyst",
+    "Red Team Operator",
+    "SOC Analyst",
+  ]) {
+    assert.equal(
+      classifyTechnicalRole(title).matchedCategory,
+      "Security Engineering",
+      `${title} should classify as Security Engineering`,
+    );
+  }
+});
+
+test("widening the security rule does not swallow genuinely non-technical analysts", () => {
+  assert.equal(classifyTechnicalRole("Financial Analyst").matchedCategory, "Non-Technical");
+  assert.equal(classifyTechnicalRole("Business Analyst").matchedCategory, "Non-Technical");
+  assert.equal(
+    classifyTechnicalRole("Data Analyst").matchedCategory,
+    "Analytics & Business Intelligence",
+  );
+});

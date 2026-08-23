@@ -41,6 +41,8 @@ function defaultFeedWindow(posts: HiringPost[], now = new Date()) {
     { age: "24h" as const, ms: 24 * 60 * 60 * 1000 },
     { age: "3d" as const, ms: 3 * 24 * 60 * 60 * 1000 },
     { age: "7d" as const, ms: 7 * 24 * 60 * 60 * 1000 },
+    { age: "14d" as const, ms: 14 * 24 * 60 * 60 * 1000 },
+    { age: "21d" as const, ms: 21 * 24 * 60 * 60 * 1000 },
   ];
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);

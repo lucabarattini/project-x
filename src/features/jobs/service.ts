@@ -60,7 +60,7 @@ export const jobBoards: JobBoard[] = [
 
 export type ProviderDiagnostic = {
   provider: string;
-  status: "ok" | "error" | "timeout";
+  status: "ok" | "empty" | "error" | "timeout";
   jobCount: number;
   durationMs: number;
   message: string | null;
@@ -141,7 +141,9 @@ async function runProvider(run: ProviderRun) {
       jobs,
       diagnostic: {
         provider: run.provider,
-        status: "ok" as const,
+        // Providers swallow their own fetch errors and return []. Reporting
+        // that as healthy is what let a network outage look like a quiet day.
+        status: jobs.length > 0 ? ("ok" as const) : ("empty" as const),
         jobCount: jobs.length,
         durationMs: Date.now() - startedAt,
         message: null,
@@ -273,11 +275,35 @@ async function buildSnapshotInternal(): Promise<JobSnapshot> {
   };
 }
 
+/**
+ * A build in which every source came back empty is an outage artifact, not a
+ * quiet day: a DNS blip or a dropped uplink makes each provider swallow its
+ * own fetch error and return []. Persisting that would serve an empty board
+ * for a full TTL and re-poison the cache on every rebuild attempted during
+ * the outage, so the build is rejected instead and the caller keeps serving
+ * the last real snapshot. The diagnostics ride along so the UI can still say
+ * which sources failed.
+ */
+class EmptySnapshotError extends Error {
+  constructor(readonly snapshot: JobSnapshot) {
+    super("JOB_SNAPSHOT_EMPTY");
+    this.name = "EmptySnapshotError";
+  }
+}
+
+async function buildVerifiedSnapshot(): Promise<JobSnapshot> {
+  const snapshot = await buildSnapshotInternal();
+  if (snapshot.entries.length === 0) {
+    throw new EmptySnapshotError(snapshot);
+  }
+  return snapshot;
+}
+
 let snapshotBuild: Promise<JobSnapshot> | null = null;
 
 function ensureSnapshotBuild(): Promise<JobSnapshot> {
   if (!snapshotBuild) {
-    snapshotBuild = buildSnapshotInternal().finally(() => {
+    snapshotBuild = buildVerifiedSnapshot().finally(() => {
       snapshotBuild = null;
     });
   }
@@ -318,7 +344,7 @@ let moduleSnapshot: JobSnapshot | null = null;
 async function buildAndCache(): Promise<JobSnapshot> {
   if (!snapshotBuild) {
     snapshotBuild = (async () => {
-      const snapshot = await buildSnapshotInternal();
+      const snapshot = await buildVerifiedSnapshot();
       try {
         const chunkCount = Math.ceil(snapshot.entries.length / snapshotChunkSize);
         await Promise.all([
@@ -356,9 +382,7 @@ export async function getSnapshot(): Promise<JobSnapshot> {
     // Rebuild synchronously rather than render a stale day against a
     // "today" filter that will then legitimately match nothing.
     if (isStaleBeyondLimit(first.fetchedAt)) {
-      const rebuilt = await buildAndCache();
-      moduleSnapshot = rebuilt;
-      return rebuilt;
+      return rebuildSnapshot();
     }
 
     const chunkCount = Math.ceil(first.jobCount / snapshotChunkSize);
@@ -377,9 +401,28 @@ export async function getSnapshot(): Promise<JobSnapshot> {
     moduleSnapshot = snapshot;
     return snapshot;
   } catch {
+    return rebuildSnapshot();
+  }
+}
+
+/**
+ * Rebuilds and promotes the result to the module fast path. When every source
+ * failed, the last real snapshot is served instead — past its TTL is still far
+ * better than an empty board — and nothing is written to the module copy or the
+ * chunk cache, so the next request retries the sources.
+ */
+async function rebuildSnapshot(): Promise<JobSnapshot> {
+  try {
     const snapshot = await buildAndCache();
     moduleSnapshot = snapshot;
     return snapshot;
+  } catch (error) {
+    if (!(error instanceof EmptySnapshotError)) {
+      throw error;
+    }
+    // No previous snapshot to fall back on: report the failure honestly
+    // rather than rendering an empty board as if it were a real result.
+    return moduleSnapshot ?? error.snapshot;
   }
 }
 
