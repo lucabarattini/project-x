@@ -66,7 +66,9 @@ export function parseExpediaSitemap(xml: string): SitemapEntry[] {
 /**
  * Parses one server-rendered Expedia Group job page: <h1> title, location
  * from the og:title ("<Title> in <Location>"), and the description inside
- * the "Desc__copy" content block.
+ * the "Desc__copy" content block. Pages whose og:title carries an empty
+ * location (" in ,") fall back to the location slug in the URL, then to
+ * "Not listed".
  */
 export function parseExpediaJobPage(
   html: string,
@@ -77,7 +79,11 @@ export function parseExpediaJobPage(
 
   const ogTitle = html.match(/<meta property="og:title" content="([^"]*)"/iu)?.[1] ?? "";
   const inIndex = ogTitle.lastIndexOf(" in ");
-  const location = inIndex >= 0 ? ogTitle.slice(inIndex + 4).trim() : "";
+  const ogLocation = (inIndex >= 0 ? ogTitle.slice(inIndex + 4).trim() : "")
+    .replace(/^[,;\-\s]+/u, "")
+    .replace(/[,;\-\s]+$/u, "")
+    .trim();
+  const location = ogLocation || locationFromUrl(url) || "Not listed";
 
   let description = "";
   const descStart = html.indexOf("Desc__copy");
@@ -99,8 +105,36 @@ export function parseExpediaJobPage(
   };
 }
 
+/**
+ * Turns the location slug in a job URL ("/job/<title>/seattle-wa/R-123/")
+ * into a display location ("Seattle, WA"). Best-effort; returns "" when the
+ * slug is missing ("-") or unparseable.
+ */
+export function locationFromUrl(url: string): string {
+  const path = new URL(url).pathname;
+  const segments = path.split("/").filter(Boolean);
+  // /job/<title-slug>/<location-slug>/<req-slug>/
+  const locationSlug = segments[2] ?? "";
+  if (!locationSlug || locationSlug === "-" || /^R-\d+/iu.test(locationSlug)) {
+    return "";
+  }
+
+  const parts = locationSlug.split("-").filter(Boolean);
+  if (parts.length < 2) {
+    return "";
+  }
+
+  const stateCode = parts.pop() ?? "";
+  const city = parts
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+  return `${city}, ${stateCode.toUpperCase()}`;
+}
+
 export async function fetchLatestExpediaJobs(options: { maxJobs?: number } = {}) {
-  const { maxJobs = 120 } = options;
+  // The sitemap currently lists ~195 openings; default to covering all of
+  // them rather than the earlier 120 cap that left roles out of the portal.
+  const { maxJobs = 200 } = options;
   const board = expediaBoards[0];
 
   const sitemapResponse = await fetch(board.sitemapUrl, {

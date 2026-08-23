@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseExpediaJobPage, parseExpediaSitemap } from "./expedia";
+import { locationFromUrl, parseExpediaJobPage, parseExpediaSitemap } from "./expedia";
 
 const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -58,4 +58,30 @@ test("parseExpediaJobPage tolerates pages without a description block", () => {
   assert.equal(job.title, "Some Role");
   assert.equal(job.location, "London, England");
   assert.equal(job.postedAt, null);
+});
+
+test("parseExpediaJobPage falls back to the URL slug for empty og:title locations", () => {
+  const job = parseExpediaJobPage(
+    `<html><head><meta property="og:title" content="Senior Product Designer in ," /></head><body><h1>Senior Product Designer</h1></body></html>`,
+    "https://careers.expediagroup.com/job/senior-product-designer/austin-tx/R-108349-1/",
+    null,
+  );
+  assert.equal(job.title, "Senior Product Designer");
+  assert.equal(job.location, "Austin, TX");
+});
+
+test("parseExpediaJobPage reports Not listed when no location is derivable", () => {
+  const job = parseExpediaJobPage(
+    `<html><head><meta property="og:title" content="Senior Product Designer in ," /></head><body><h1>Senior Product Designer</h1></body></html>`,
+    "https://careers.expediagroup.com/job/senior-product-designer/-/R-108349-1/",
+    null,
+  );
+  assert.equal(job.location, "Not listed");
+});
+
+test("locationFromUrl converts city-state slugs into display locations", () => {
+  assert.equal(locationFromUrl("https://careers.expediagroup.com/job/x/seattle-wa/R-1/"), "Seattle, WA");
+  assert.equal(locationFromUrl("https://careers.expediagroup.com/job/x/west-hollywood-ca/R-2/"), "West Hollywood, CA");
+  assert.equal(locationFromUrl("https://careers.expediagroup.com/job/x/-/R-3/"), "");
+  assert.equal(locationFromUrl("https://careers.expediagroup.com/job/x/R-4/"), "");
 });
