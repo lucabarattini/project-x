@@ -1,4 +1,5 @@
 import boards from "../../../../data/meta-boards.json";
+import { detailConcurrency, mapWithinDeadline } from "./concurrency";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
 type MetaBoard = GreenhouseBoard & {
@@ -66,36 +67,6 @@ function stripHtml(html = "") {
     .replace(/&#39;/giu, "'")
     .replace(/\s+/gu, " ")
     .trim();
-}
-
-/**
- * Fans out over the postings and stops once the run deadline passes, so a
- * slow window degrades to partial results rather than letting the caller's
- * timeout discard everything already fetched.
- */
-async function mapWithinDeadline<T, R>(
-  items: T[],
-  limit: number,
-  startedAt: number,
-  deadlineMs: number,
-  mapper: (item: T) => Promise<R>,
-) {
-  const results: R[] = [];
-  let index = 0;
-
-  async function worker() {
-    while (index < items.length) {
-      const current = items[index];
-      index += 1;
-      if (Date.now() - startedAt > deadlineMs) {
-        return;
-      }
-      results.push(await mapper(current));
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
 }
 
 /**
@@ -179,16 +150,14 @@ export function parseMetaJobPage(html: string, url: string): ParsedMetaJob | nul
  * a real `datePosted`.
  */
 export async function fetchLatestMetaJobs(options: { maxJobs?: number } = {}) {
-  const { maxJobs = 240 } = options;
+  const { maxJobs = 869 } = options;
   const board = metaBoards[0];
-  // Wall-clock budget for the whole run, comfortably inside the caller's 30s
-  // provider timeout.
+  // Wall-clock budget for the whole run, inside the caller's provider timeout.
+  // The sitemap carries no ordering signal, so whatever the deadline cuts off
+  // is an arbitrary slice rather than the oldest postings.
   const startedAt = Date.now();
-  const runDeadlineMs = 24_000;
+  const runDeadlineMs = 45_000;
 
-  // Lower concurrency in serverless: Meta is quick to reject bursts from
-  // datacenter IPs, and a rejected page costs the whole posting.
-  const detailConcurrency = process.env.VERCEL === "1" ? 8 : 16;
 
   const sitemapResponse = await fetch(board.sitemapUrl, {
     next: { revalidate: 300 },

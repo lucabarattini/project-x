@@ -1,4 +1,5 @@
 import boards from "../../../../data/microsoft-boards.json";
+import { mapWithinDeadline, pageConcurrency } from "./concurrency";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
 export const microsoftBoards = boards as GreenhouseBoard[];
@@ -91,34 +92,42 @@ export function parsePcsxPositions(
 }
 
 /**
+ * Reads the reported result count, which page one uses to schedule the rest
+ * of the pages in parallel rather than walking them ten rows at a time.
+ */
+export function parsePcsxCount(json: unknown): number {
+  const count = (json as { data?: { count?: unknown } } | null)?.data?.count;
+  return typeof count === "number" && count > 0 ? count : 0;
+}
+
+/**
  * Microsoft retired `gcsservices.careers.microsoft.com` (its hostname now
  * answers with a mismatched CDN certificate) and moved onto an Eightfold
  * PCSX site. `/api/pcsx/search` is one of the paths their robots.txt allows;
  * the older `/api/apply/v2/jobs` answers 403 "Not authorized for PCSX".
- * A page is capped at 10 rows server-side, so a US crawl is maxJobs/10 calls.
+ * A page is capped at 10 rows server-side, so the ~1.1k US openings would take
+ * ~110 calls. Microsoft rate-limits that per IP (429, then 403 for a cooldown
+ * that outlives a single run), so the crawl is ordered newest-first via
+ * `sort_by=timestamp` and bounded: a radar wants the recent end of the board,
+ * and stopping at the first 429 keeps the next run's budget intact.
  */
 export async function fetchLatestMicrosoftJobs(options: { maxJobs?: number } = {}) {
-  const { maxJobs = 300 } = options;
+  const { maxJobs = 600 } = options;
   const board = microsoftBoards[0];
   const pageSize = 10;
-  const jobs: GreenhouseJob[] = [];
-  // Wall-clock budget inside the caller's 25s provider timeout: a slow
-  // window stops paging and keeps the postings already collected.
   const startedAt = Date.now();
-  const runDeadlineMs = 20_000;
+  const runDeadlineMs = 26_000;
 
-  for (let page = 0; page < Math.ceil(maxJobs / pageSize); page += 1) {
-    if (Date.now() - startedAt > runDeadlineMs) {
-      break;
+  let rateLimited = false;
+
+  async function readPage(start: number) {
+    if (rateLimited) {
+      return null;
     }
-
-    const url = `${board.apiUrl}&start=${page * pageSize}&num=${pageSize}`;
-
-    let response: Response;
     try {
-      response = await fetch(url, {
+      const response = await fetch(`${board.apiUrl}&start=${start}&num=${pageSize}`, {
         next: { revalidate: 300 },
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(10_000),
         headers: {
           accept: "application/json",
           referer: board.boardUrl,
@@ -126,31 +135,44 @@ export async function fetchLatestMicrosoftJobs(options: { maxJobs?: number } = {
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
         },
       });
+      // 429 is the throttle and 403 is the cooldown that follows it; both mean
+      // every further page this run would be wasted.
+      if (response.status === 429 || response.status === 403) {
+        rateLimited = true;
+        return null;
+      }
+      return response.ok ? ((await response.json()) as unknown) : null;
     } catch {
-      break;
-    }
-    if (!response.ok) {
-      break;
-    }
-
-    const parsed = parsePcsxPositions(await response.json(), board.boardUrl);
-    if (parsed.length === 0) {
-      break;
-    }
-
-    jobs.push(
-      ...parsed.map((job) => ({
-        ...job,
-        company: board.company,
-        boardToken: board.token,
-        updatedAt: null,
-      })),
-    );
-
-    if (parsed.length < pageSize || jobs.length >= maxJobs) {
-      break;
+      return null;
     }
   }
 
-  return jobs;
+  const firstPage = await readPage(0);
+  const parsed = parsePcsxPositions(firstPage, board.boardUrl);
+  if (parsed.length === 0) {
+    return [];
+  }
+
+  const total = Math.min(parsePcsxCount(firstPage) || parsed.length, maxJobs);
+  const remainingOffsets = Array.from(
+    { length: Math.max(0, Math.ceil(total / pageSize) - 1) },
+    (_, index) => (index + 1) * pageSize,
+  );
+
+  const rest = await mapWithinDeadline(
+    remainingOffsets,
+    pageConcurrency,
+    startedAt,
+    runDeadlineMs,
+    async (start) => parsePcsxPositions(await readPage(start), board.boardUrl),
+  );
+
+  return [...parsed, ...rest.flat()]
+    .slice(0, maxJobs)
+    .map((job) => ({
+      ...job,
+      company: board.company,
+      boardToken: board.token,
+      updatedAt: null,
+    })) satisfies GreenhouseJob[];
 }

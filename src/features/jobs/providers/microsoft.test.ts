@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatPcsxLocation, parsePcsxPositions } from "./microsoft";
+import { formatPcsxLocation, parsePcsxCount, parsePcsxPositions } from "./microsoft";
 
 const siteBaseUrl = "https://apply.careers.microsoft.com/careers";
 
@@ -75,4 +75,11 @@ test("formatPcsxLocation drops Microsoft's repeated placeholder segments", () =>
   assert.equal(formatPcsxLocation(["Redmond, Washington, United States"]), "Redmond, Washington, United States");
   assert.equal(formatPcsxLocation([]), "Not listed");
   assert.equal(formatPcsxLocation(undefined), "Not listed");
+});
+
+test("parsePcsxCount reports how many offsets the fan-out should schedule", () => {
+  assert.equal(parsePcsxCount(response), 1107);
+  assert.equal(parsePcsxCount({ data: { count: 0 } }), 0);
+  assert.equal(parsePcsxCount({ data: {} }), 0);
+  assert.equal(parsePcsxCount(null), 0);
 });

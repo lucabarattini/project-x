@@ -1,4 +1,5 @@
 import boards from "../../../../data/apple-boards.json";
+import { mapWithinDeadline, pageConcurrency } from "./concurrency";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
 type AppleBoard = GreenhouseBoard & {
@@ -126,58 +127,86 @@ export function parseAppleHydrationData(html: string): ParsedAppleJob[] {
 }
 
 /**
+ * Reads `totalRecords` out of the same hydration blob. Page one reports how
+ * many US openings exist, which is what lets the remaining pages be fetched
+ * in parallel instead of discovered one redirect at a time.
+ */
+export function parseAppleTotalRecords(html: string): number {
+  const literal = html.match(
+    /window\.__staticRouterHydrationData\s*=\s*JSON\.parse\(("[\s\S]*?[^\\]")\);/u,
+  )?.[1];
+  if (!literal) {
+    return 0;
+  }
+
+  try {
+    const total = (
+      JSON.parse(JSON.parse(literal) as string) as {
+        loaderData?: { search?: { totalRecords?: unknown } };
+      }
+    )?.loaderData?.search?.totalRecords;
+    return typeof total === "number" && total > 0 ? total : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Walks the US search results newest-first, 20 postings per page. Apple
- * reports ~4.5k US openings, so `maxJobs` is what actually bounds the crawl.
+ * reports ~4.5k US openings; page one gives the total, then the remaining
+ * pages are fetched in parallel, which is the difference between covering
+ * a few hundred roles and covering the board.
  */
 export async function fetchLatestAppleJobs(options: { maxJobs?: number } = {}) {
-  const { maxJobs = 300 } = options;
+  const { maxJobs = 4600 } = options;
   const board = appleBoards[0];
   const pageSize = 20;
-  const jobs: GreenhouseJob[] = [];
-  // Wall-clock budget inside the caller's 20s provider timeout: a slow
-  // window stops paging and keeps the postings already collected.
+  // Wall-clock budget inside the caller's provider timeout: a slow window
+  // stops paging and keeps the postings already collected.
   const startedAt = Date.now();
-  const runDeadlineMs = 16_000;
+  const runDeadlineMs = 42_000;
 
-  for (let page = 1; page <= Math.ceil(maxJobs / pageSize); page += 1) {
-    if (Date.now() - startedAt > runDeadlineMs) {
-      break;
-    }
+  const pageUrl = (page: number) => `${board.searchUrl}&page=${page}`;
 
-    const url = `${board.searchUrl}&page=${page}`;
-
-    let response: Response;
+  async function readPage(url: string) {
     try {
-      response = await fetch(url, {
+      const response = await fetch(url, {
         next: { revalidate: 300 },
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(12_000),
         headers: browserHeaders,
       });
+      return response.ok ? await response.text() : "";
     } catch {
-      break;
-    }
-    if (!response.ok) {
-      break;
-    }
-
-    const parsed = parseAppleHydrationData(await response.text());
-    if (parsed.length === 0) {
-      break;
-    }
-
-    jobs.push(
-      ...parsed.map((job) => ({
-        ...job,
-        company: board.company,
-        boardToken: board.token,
-        updatedAt: null,
-      })),
-    );
-
-    if (parsed.length < pageSize || jobs.length >= maxJobs) {
-      break;
+      return "";
     }
   }
 
-  return jobs;
+  const firstPage = await readPage(pageUrl(1));
+  const parsed = parseAppleHydrationData(firstPage);
+  if (parsed.length === 0) {
+    return [];
+  }
+
+  const total = Math.min(parseAppleTotalRecords(firstPage) || parsed.length, maxJobs);
+  const remainingPages = Array.from(
+    { length: Math.max(0, Math.ceil(total / pageSize) - 1) },
+    (_, index) => index + 2,
+  );
+
+  const rest = await mapWithinDeadline(
+    remainingPages,
+    pageConcurrency,
+    startedAt,
+    runDeadlineMs,
+    async (page) => parseAppleHydrationData(await readPage(pageUrl(page))),
+  );
+
+  return [...parsed, ...rest.flat()]
+    .slice(0, maxJobs)
+    .map((job) => ({
+      ...job,
+      company: board.company,
+      boardToken: board.token,
+      updatedAt: null,
+    })) satisfies GreenhouseJob[];
 }

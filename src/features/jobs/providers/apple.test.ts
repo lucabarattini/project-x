@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatAppleLocation, parseAppleHydrationData } from "./apple";
+import {
+  formatAppleLocation,
+  parseAppleHydrationData,
+  parseAppleTotalRecords,
+} from "./apple";
 
-function pageWith(searchResults: unknown) {
-  const document = JSON.stringify({ loaderData: { search: { searchResults } } });
+function pageWith(searchResults: unknown, totalRecords = 4497) {
+  const document = JSON.stringify({ loaderData: { search: { searchResults, totalRecords } } });
   return `<html><body><script>window.__staticRouterHydrationData = JSON.parse(${JSON.stringify(document)});</script></body></html>`;
 }
 
@@ -70,4 +74,14 @@ test("formatAppleLocation keeps the country so US filtering still works", () => 
   );
   assert.equal(formatAppleLocation(undefined), "Not listed");
   assert.equal(formatAppleLocation([]), "Not listed");
+});
+
+test("parseAppleTotalRecords reports how many pages the fan-out should schedule", () => {
+  assert.equal(parseAppleTotalRecords(page), 4497);
+  assert.equal(parseAppleTotalRecords(pageWith([], 0)), 0);
+  assert.equal(parseAppleTotalRecords(""), 0);
+  assert.equal(
+    parseAppleTotalRecords('<script>window.__staticRouterHydrationData = JSON.parse("{broken");</script>'),
+    0,
+  );
 });

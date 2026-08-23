@@ -4,7 +4,7 @@
     "token": "microsoft-pcsx",
     "source": "official-careers-page,eightfold-pcsx-api",
     "boardUrl": "https://apply.careers.microsoft.com/careers",
-    "apiUrl": "https://apply.careers.microsoft.com/api/pcsx/search?domain=microsoft.com&location=United%20States",
+    "apiUrl": "https://apply.careers.microsoft.com/api/pcsx/search?domain=microsoft.com&location=United%20States&sort_by=timestamp",
     "lastVerifiedJobCount": 1107
   }
 ]
