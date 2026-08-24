@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { CompanyLogo } from "@/features/companies/CompanyLogo";
 import { FaceAvatar } from "@/features/network/FaceAvatar";
@@ -32,6 +32,8 @@ const ageMilliseconds: Record<Exclude<AgeFilter, "today">, number> = {
   "14d": 14 * 24 * 60 * 60 * 1000,
   "21d": 21 * 24 * 60 * 60 * 1000,
 };
+
+const ageCandidates: AgeFilter[] = ["today", "24h", "3d", "7d", "14d", "21d"];
 
 const ageFilterLabels: Record<Exclude<AgeFilter, "today">, string> = {
   "24h": "24 hours",
@@ -268,13 +270,21 @@ export function HiringPostDashboard({
     };
   }, [audience, decisions, posts]);
 
-  const normalizedQuery = query.trim().toLowerCase();
-  const selectedLocations = locationFilters.filter((item) => locations.includes(item.value));
-  const startOfToday = new Date(renderedAtTimestamp);
-  startOfToday.setHours(0, 0, 0, 0);
-  const todayStart = startOfToday.getTime();
+  // These three feed matchesFilters, which is memoized below so the filtered
+  // list can depend on it by identity. Recomputing them every render would
+  // change that identity every render and defeat the memo.
+  const normalizedQuery = useMemo(() => query.trim().toLowerCase(), [query]);
+  const selectedLocations = useMemo(
+    () => locationFilters.filter((item) => locations.includes(item.value)),
+    [locations],
+  );
+  const todayStart = useMemo(() => {
+    const startOfToday = new Date(renderedAtTimestamp);
+    startOfToday.setHours(0, 0, 0, 0);
+    return startOfToday.getTime();
+  }, [renderedAtTimestamp]);
 
-  function matchesFilters(post: HiringPost, ageValue: AgeFilter) {
+  const matchesFilters = useCallback(function matchesFilters(post: HiringPost, ageValue: AgeFilter) {
     const decision = decisions[post.id];
     const viewMatches = view === "queue"
       ? post.matchStatus !== "excluded" && !decision
@@ -307,9 +317,8 @@ export function HiringPostDashboard({
       && ageMatches
       && locationMatches
       && textMatches;
-  }
+  }, [audience, company, contactType, decisions, normalizedQuery, region, renderedAtTimestamp, selectedLocations, todayStart, view]);
 
-  const ageCandidates: AgeFilter[] = ["today", "24h", "3d", "7d", "14d", "21d"];
   const ageCounts = useMemo(() => {
     const countsByAge = new Map<AgeFilter, number>();
     for (const candidate of ageCandidates) {
@@ -320,7 +329,7 @@ export function HiringPostDashboard({
       countsByAge.set(candidate, count);
     }
     return countsByAge;
-  }, [audience, company, contactType, decisions, locations, posts, query, region, renderedAtTimestamp, view]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [matchesFilters, posts]);
 
   // The "today" window is calendar-day based and can be near-empty at some
   // hours. When the visitor hasn't touched the date filter and today yields
@@ -334,9 +343,14 @@ export function HiringPostDashboard({
         ?? "today"
     : age;
 
+  // Every input matchesFilters closes over has to be listed: the array below
+  // once held only [posts, effectiveAge], so changing Company (or contact,
+  // region, location, query) returned the memoized list unchanged and the
+  // filter looked dead. It only ever appeared to work when the change also
+  // moved effectiveAge through ageCounts.
   const filtered = useMemo(() => {
     return posts.filter((post) => matchesFilters(post, effectiveAge));
-  }, [posts, effectiveAge]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [effectiveAge, matchesFilters, posts]);
 
   // Metadata-only posts (see contentOmitted) fetch their full text on demand,
   // batched in a single request, so the initial HTML stays small.
