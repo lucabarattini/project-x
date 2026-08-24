@@ -194,7 +194,11 @@ async function AppSection({ searchParams }: { searchParams: Record<string, strin
     timeZoneName: "short",
   }).format(new Date(snapshot.fetchedAt));
 
-  const healthyProviders = snapshot.diagnostics.filter((item) => item.status === "ok").length;
+  // A source that answered with nothing to list is still healthy: a board can
+  // legitimately have no current openings. Only errors and timeouts are unhealthy.
+  const healthyProviders = snapshot.diagnostics.filter((item) => (
+    item.status === "ok" || item.status === "empty"
+  )).length;
 
   return (
     <>

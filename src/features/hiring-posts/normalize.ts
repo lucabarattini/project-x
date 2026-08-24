@@ -138,7 +138,12 @@ export function normalizeHiringPost(
 
   let matchStatus: HiringPost["matchStatus"] = "match";
   if (exclusionReasons.length > 0) matchStatus = "excluded";
-  else if (location.status === "unknown" || roleFamily === "Other") {
+  else if (roleFamily === "Other") {
+    // An unverified location is not grounds for dropping a lead: most posts
+    // never state one, the label already says it needs checking, and the U.S.
+    // region filter keeps "unknown" visible anyway. Only a post whose role
+    // could not be identified at all still needs a hiring owner to be worth
+    // surfacing.
     const isHighIntentContact = contactType === "direct-team" || contactType === "recruiter";
     if (isHighIntentContact) {
       matchStatus = "review";
@@ -146,6 +151,8 @@ export function normalizeHiringPost(
       matchStatus = "excluded";
       exclusionReasons.push("No actionable hiring owner or role was identified");
     }
+  } else if (location.status === "unknown") {
+    matchStatus = "review";
   }
 
   let score = 0;

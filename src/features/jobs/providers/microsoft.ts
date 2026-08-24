@@ -28,24 +28,46 @@ export type ParsedPcsxJob = {
 };
 
 /**
- * Collapses one `locations[]` entry. Microsoft pads multi-site postings out
- * to "United States, Multiple Locations, Multiple Locations", so repeated
- * segments are dropped rather than shown back to the reader.
+ * Renders a posting's locations. Two traps in this payload:
+ *
+ * `locations` pads multi-site postings with the literal placeholder "United
+ * States, Multiple Locations, Multiple Locations" and puts it FIRST, with the
+ * real offices after it — the careers site renders exactly that, then hides the
+ * rest behind a "+1 more" tooltip. Reading only `locations[0]` therefore showed
+ * the placeholder and dropped every actual city.
+ *
+ * `standardizedLocations` carries the same list already normalized to
+ * "Redmond, WA, US", which is both cleaner and what the country filter keys on,
+ * so it is preferred; it degrades to a bare "US" for the padded entries.
+ *
+ * Placeholders are dropped whenever a real office survives, and a posting that
+ * is genuinely US-wide reports "United States" rather than repeating itself.
  */
-export function formatPcsxLocation(locations: string[] | undefined) {
-  const first = Array.isArray(locations)
-    ? locations.find((entry) => typeof entry === "string" && entry.trim())
-    : undefined;
-  if (!first) {
-    return "Not listed";
+const placeholderLocation = /multiple locations|^\s*US\s*$|^\s*United States\s*$/iu;
+
+export function formatPcsxLocation(
+  locations: string[] | undefined,
+  standardizedLocations?: string[],
+) {
+  const clean = (values: string[] | undefined) => (Array.isArray(values) ? values : [])
+    .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+    .map((value) => [...new Set(
+      value.split(",").map((segment) => segment.trim()).filter(Boolean),
+    )].join(", "));
+
+  const standardized = clean(standardizedLocations);
+  const raw = clean(locations);
+
+  const named = standardized.filter((value) => !placeholderLocation.test(value));
+  const fallback = raw.filter((value) => !placeholderLocation.test(value));
+  const preferred = named.length > 0 ? named : fallback;
+
+  if (preferred.length > 0) {
+    return [...new Set(preferred)].join(" · ");
   }
 
-  const segments = first
-    .split(",")
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-
-  return [...new Set(segments)].join(", ") || "Not listed";
+  // Only placeholders came back: the posting really is US-wide.
+  return standardized.length > 0 || raw.length > 0 ? "United States" : "Not listed";
 }
 
 /**
@@ -78,7 +100,7 @@ export function parsePcsxPositions(
     jobs.push({
       id: String(position.displayJobId ?? position.atsJobId ?? id),
       title,
-      location: formatPcsxLocation(position.locations),
+      location: formatPcsxLocation(position.locations, position.standardizedLocations),
       absoluteUrl: new URL(path, siteBaseUrl).toString(),
       contentText: [position.department, position.workLocationOption]
         .filter((part): part is string => typeof part === "string" && Boolean(part))

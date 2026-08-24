@@ -319,7 +319,13 @@ export function JobDashboard({
     : params.experience.map((item) => experienceLabels[item]).join(" · ");
   const dateLabel = dateFilterOptions.find((option) => option.value === params.date)?.label ?? "All dates";
 
-  const providerWarnings = diagnostics.filter((diagnostic) => diagnostic.status !== "ok");
+  // "empty" means the source answered but had nothing to list — a board with no
+  // current openings is healthy, not down — so only real failures are counted
+  // as unavailable. Empty sources are still surfaced, worded for what they are.
+  const providerWarnings = diagnostics.filter((diagnostic) => (
+    diagnostic.status === "error" || diagnostic.status === "timeout"
+  ));
+  const emptyProviders = diagnostics.filter((diagnostic) => diagnostic.status === "empty");
 
   const effectiveCountryLabel =
     params.locations.length > 0 ? "All countries" : params.country === "us" ? "U.S. based" : "All countries";
@@ -906,6 +912,14 @@ export function JobDashboard({
                     <p className="inline-flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400">
                       <Icon name="alert-triangle" className="h-3.5 w-3.5" />
                       {providerWarnings.length} source{providerWarnings.length === 1 ? "" : "s"} unavailable
+                    </p>
+                  </>
+                ) : null}
+                {emptyProviders.length > 0 ? (
+                  <>
+                    <p className="hidden text-slate-300 sm:inline">·</p>
+                    <p className="text-slate-500 dark:text-slate-400">
+                      {emptyProviders.length} source{emptyProviders.length === 1 ? "" : "s"} with no openings
                     </p>
                   </>
                 ) : null}

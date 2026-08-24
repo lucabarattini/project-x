@@ -324,3 +324,34 @@ test("collapses identical low-signal campaigns shared by different employees", (
   assert.equal(feed.posts.length, 1);
   assert.deepEqual(new Set(feed.posts[0].sourcePostIds), new Set(["post-1", "post-campaign-2"]));
 });
+
+test("an unverified location alone no longer drops a lead", () => {
+  // Most posts never state a location. Excluding on that removed real leads —
+  // a Databricks employee post naming the team and the roles was dropped —
+  // while the U.S. region filter already keeps "unknown" visible.
+  const post = normalizeHiringPost(rawPost({
+    id: "post-nolocation",
+    linkedinUrl: "https://www.linkedin.com/posts/post-nolocation",
+    content: "We're hiring across various roles on the CustomerLake team at Databricks, including ML/LLM Engineering and Product Designer.",
+  }), now);
+  assert.ok(post);
+  assert.equal(post.location.status, "unknown");
+  assert.notEqual(post.matchStatus, "excluded");
+  assert.ok(!post.exclusionReasons.includes("No actionable hiring owner or role was identified"));
+});
+
+test("a post whose role cannot be identified still needs a hiring owner", () => {
+  // The other half of the rule stays: an employee share with no identifiable
+  // role is noise, and that is what the exclusion is actually for.
+  const vague = normalizeHiringPost(rawPost({
+    id: "post-vague",
+    linkedinUrl: "https://www.linkedin.com/posts/post-vague",
+    content: "We're hiring! Great things happening at Amazon.",
+    article: undefined,
+  }), now);
+  assert.ok(vague);
+  assert.equal(vague.roleFamily, "Other");
+  assert.equal(vague.contactType, "employee-share");
+  assert.equal(vague.matchStatus, "excluded");
+  assert.ok(vague.exclusionReasons.includes("No actionable hiring owner or role was identified"));
+});
