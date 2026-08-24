@@ -42,3 +42,34 @@ test("isNonHiringNoise catches job-search posts, not hiring posts", () => {
   assert.equal(isNonHiringNoise("I'm looking for my next role, please connect."), true);
   assert.equal(isNonHiringNoise("We're hiring engineers! Apply here."), false);
 });
+
+test("a post that names only a non-US office city is not U.S.", () => {
+  // Reported from the live feed: an Amazon Hyderabad post carried no country
+  // name, scored no signal either way, and "unknown" is shown in the U.S. feed.
+  const post = inferLocation(
+    "My team at Amazon Hyderabad is hiring for a Foreign Tax Senior Analyst! #Amazon #Hyderabad",
+  );
+  assert.equal(post.status, "outside-us");
+  assert.equal(post.label, "Hyderabad");
+
+  for (const city of ["Bengaluru", "Gurugram", "Toronto", "Tel Aviv", "Sao Paulo"]) {
+    assert.equal(
+      inferLocation(`We are hiring in ${city}`).status,
+      "outside-us",
+      `${city} should read as outside the U.S.`,
+    );
+  }
+});
+
+test("city names shared with U.S. towns still read as U.S. when a state is given", () => {
+  // A false "outside-us" hides a real lead, so these stay out of the city list
+  // and must keep resolving through their state signal.
+  assert.equal(inferLocation("Our Cambridge, MA office is hiring").status, "us");
+  assert.equal(inferLocation("Dublin, OH team is growing").status, "us");
+  assert.equal(inferLocation("Vienna, VA opening").status, "us");
+  assert.equal(inferLocation("Hiring in Seattle, WA").status, "us");
+});
+
+test("a post with no location signal at all stays unknown", () => {
+  assert.equal(inferLocation("Remote role, apply now").status, "unknown");
+});

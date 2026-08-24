@@ -43,13 +43,48 @@ const outsideUsNames = [
   "APAC", "Middle East", "European Union", "Türkiye", "UK", "U.K.",
 ];
 
+/**
+ * Country names alone miss the most common way a post states a non-US role:
+ * naming the office city ("My team at Amazon Hyderabad is hiring", "#Hyderabad")
+ * with no country anywhere in the text. Such a post scored no signal either
+ * way, landed on "unknown", and "unknown" is shown in the U.S. feed.
+ *
+ * Only cities without a meaningful U.S. namesake are listed. Dublin, Vienna,
+ * Cambridge, Birmingham, Manchester, Athens, Rome and Naples are deliberately
+ * absent: each is also a U.S. city, and a false "outside-us" silently hides a
+ * real lead, which is the worse failure of the two.
+ */
+const outsideUsCities = [
+  // India — the gap this list was added for.
+  "Hyderabad", "Bengaluru", "Bangalore", "Mumbai", "Pune", "Chennai",
+  "Gurgaon", "Gurugram", "Noida", "Kolkata", "Ahmedabad", "New Delhi",
+  // Canada
+  "Toronto", "Vancouver", "Montreal", "Ottawa", "Calgary",
+  // Europe
+  "London", "Amsterdam", "Barcelona", "Madrid", "Munich", "Berlin", "Paris",
+  "Warsaw", "Krakow", "Lisbon", "Bucharest", "Prague", "Zurich", "Geneva",
+  "Stockholm", "Copenhagen", "Helsinki", "Oslo", "Milan", "Edinburgh",
+  // Middle East & Africa
+  "Tel Aviv", "Dubai", "Abu Dhabi", "Riyadh", "Cairo", "Nairobi", "Lagos",
+  "Johannesburg", "Cape Town",
+  // APAC
+  "Tokyo", "Seoul", "Shanghai", "Beijing", "Shenzhen", "Taipei", "Sydney",
+  "Melbourne", "Manila", "Bangkok", "Jakarta", "Kuala Lumpur", "Ho Chi Minh",
+  // LATAM
+  "Sao Paulo", "São Paulo", "Buenos Aires", "Bogota", "Bogotá",
+  "Mexico City", "Guadalajara", "Santiago",
+];
+
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 const usStatePattern = new RegExp(`\\b(?:${usStateNames.map(escapeRegex).join("|")})\\b`, "iu");
 const usStateCodePattern = new RegExp(`,\\s*(?:${usStateCodes.join("|")})\\b`, "u");
-const outsideUsPattern = new RegExp(`\\b(?:${outsideUsNames.map(escapeRegex).join("|")})\\b`, "iu");
+const outsideUsPattern = new RegExp(
+  `\\b(?:${[...outsideUsNames, ...outsideUsCities].map(escapeRegex).join("|")})\\b`,
+  "iu",
+);
 
 function locationStatus(text: string) {
   const hasUsSignal = /\b(?:United States|USA|U\.S\.A?\.)\b/iu.test(text)
