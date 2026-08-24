@@ -111,13 +111,36 @@ async function actorRunInput(runId: string) {
   if (!inputResponse.ok) {
     throw new Error(`Apify run input read failed with ${inputResponse.status}`);
   }
-  return inputResponse.json() as Promise<{ authorsCompanies?: unknown }>;
+  return inputResponse.json() as Promise<{
+    authorsCompanies?: unknown;
+    postedLimit?: unknown;
+    maxPosts?: unknown;
+  }>;
 }
 
-export async function syncLinkedinPostSearchTask(companyBatchIndex = 0) {
+const searchWindows: HiringPostSearchWindow[] = ["1h", "24h", "week"];
+
+function asSearchWindow(value: unknown) {
+  return searchWindows.find((window) => window === value);
+}
+
+function asMaxPosts(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
+}
+
+export async function syncLinkedinPostSearchTask(
+  companyBatchIndex = 0,
+  tuning: { postedLimit?: HiringPostSearchWindow; maxPosts?: number } = {},
+) {
   const taskId = expectedApifyTaskId();
   if (!taskId) return false;
-  const input = buildLinkedinPostSearchInput("24h", undefined, companyBatchIndex);
+  const input = buildLinkedinPostSearchInput(
+    tuning.postedLimit ?? "24h",
+    tuning.maxPosts,
+    companyBatchIndex,
+  );
   const response = await fetch(
     `${apifyApiBase}/actor-tasks/${encodeURIComponent(taskId)}/input`,
     {
@@ -137,13 +160,25 @@ export async function syncLinkedinPostSearchTask(companyBatchIndex = 0) {
   return {
     batchIndex: companyBatchIndex,
     companyCount: input.authorsCompanies.length,
+    postedLimit: input.postedLimit,
+    maxPosts: input.maxPosts,
   };
 }
 
+/**
+ * Advances the company batch after a run. postedLimit and maxPosts are carried
+ * over from the run that just finished: this writes the whole task input, so
+ * rebuilding them from defaults silently reverted anything tuned in the Apify
+ * console — a widened backfill window lasted until the next run and no further.
+ */
 export async function rotateLinkedinPostSearchTaskAfterRun(runId: string) {
   const input = await actorRunInput(runId);
   return syncLinkedinPostSearchTask(
     nextHiringPostCompanyBatchIndex(input.authorsCompanies),
+    {
+      postedLimit: asSearchWindow(input.postedLimit),
+      maxPosts: asMaxPosts(input.maxPosts),
+    },
   );
 }
 

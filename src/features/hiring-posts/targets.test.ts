@@ -6,6 +6,7 @@ import {
   hiringPostCompanyBatches,
   hiringPostCompanyCycleHours,
   hiringPostMaxCompaniesPerBatch,
+  hiringPostScanCadenceHours,
   nextHiringPostCompanyBatchIndex,
   projectedMonthlyPostMaximum,
 } from "./search-config";
@@ -42,7 +43,7 @@ test("maps known career URLs back to their companies", () => {
   );
 });
 
-test("rotates every company through Apify inputs of no more than twenty", () => {
+test("rotates every company through bounded Apify inputs", () => {
   const input = buildLinkedinPostSearchInput();
   const secondInput = buildLinkedinPostSearchInput("24h", 10, 1);
   assert.equal(input.searchQueries.length, 3);
@@ -63,8 +64,21 @@ test("rotates every company through Apify inputs of no more than twenty", () => 
   assert.equal(nextHiringPostCompanyBatchIndex(["Amazon", "Google"]), 0);
   assert.equal(input.postedLimit, "24h");
   assert.equal(input.maxPosts, 10);
-  assert.equal(hiringPostCompanyBatches.length, 5);
-  assert.equal(hiringPostCompanyCycleHours, 20);
+  assert.equal(hiringPostCompanyBatches.length, 6);
+  assert.equal(hiringPostCompanyCycleHours, 24);
   assert.equal(projectedMonthlyPostMaximum(31), 5_580);
   assert.ok(projectedMonthlyPostMaximum(31) < 6_000);
+});
+
+test("the batch rotation tiles the postedLimit window exactly", () => {
+  // The rotation cycle and the 24h postedLimit window have to match. A shorter
+  // cycle re-fetches — and re-pays for — the overlap on every pass; a longer one
+  // leaves a gap whose posts are never seen. This pins the sizing that keeps
+  // hiringPostMaxCompaniesPerBatch honest as the company list grows.
+  assert.equal(hiringPostCompanyCycleHours, 24);
+  assert.equal(buildLinkedinPostSearchInput().postedLimit, "24h");
+  assert.equal(
+    hiringPostCompanyBatches.length * hiringPostScanCadenceHours,
+    hiringPostCompanyCycleHours,
+  );
 });
