@@ -4,12 +4,22 @@ import { hiringPostCompanies } from "./targets";
  * Three query families so both the technical and the non-technical feed get
  * real coverage every cycle: generic outreach phrasing, engineering/data
  * roles, and business roles. maxPosts applies per query, so a run can return
- * up to queries × maxPosts candidates.
+ * up to queries × maxPosts candidates — and, just as importantly, a term added
+ * to an existing family competes for that family's own budget rather than
+ * enlarging the bill.
+ *
+ * The business family listed GTM titles only, so individual-contributor finance
+ * roles never had a query of their own: every finance post in the feed arrived
+ * through the generic family, where it competed with everything else a company
+ * posted that day. That is why manager- and director-level finance roles came
+ * through while "Financial Analyst" — a title the job boards carry constantly —
+ * never did. The family runs well under its cap (2 of 15 on a sampled run), so
+ * finance and analyst phrasing fits inside the existing budget.
  */
 export const hiringPostSearchQueries = [
   "\"my team is hiring\" OR \"our team is hiring\" OR \"I'm hiring\" OR \"we're hiring\" OR \"hiring for\"",
   "\"hiring ML engineer\" OR \"hiring machine learning\" OR \"hiring a data scientist\" OR \"hiring software engineer\" OR \"team is hiring engineers\"",
-  "\"hiring an account executive\" OR \"hiring a product manager\" OR \"hiring marketing\" OR \"hiring customer success\" OR \"hiring sales\" OR \"hiring operations\"",
+  "\"hiring an account executive\" OR \"hiring a product manager\" OR \"hiring marketing\" OR \"hiring customer success\" OR \"hiring sales\" OR \"hiring operations\" OR \"hiring a financial analyst\" OR \"hiring a finance manager\" OR \"hiring an accountant\" OR \"hiring an analyst\"",
 ] as const;
 
 export const hiringPostSearchQuery = hiringPostSearchQueries[0];

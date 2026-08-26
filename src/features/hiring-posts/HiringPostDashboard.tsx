@@ -348,8 +348,18 @@ export function HiringPostDashboard({
   // region, location, query) returned the memoized list unchanged and the
   // filter looked dead. It only ever appeared to work when the change also
   // moved effectiveAge through ageCounts.
+  // The stored feed is ordered for consolidation — match before review before
+  // excluded, then by score — which buried a signal posted an hour ago under
+  // one from five days ago. A radar is read newest-first, so the visible list
+  // is sorted by recency here; score only breaks ties.
   const filtered = useMemo(() => {
-    return posts.filter((post) => matchesFilters(post, effectiveAge));
+    return posts
+      .filter((post) => matchesFilters(post, effectiveAge))
+      .sort((left, right) => {
+        const byRecency = Date.parse(right.postedAt) - Date.parse(left.postedAt);
+        if (byRecency !== 0 && !Number.isNaN(byRecency)) return byRecency;
+        return right.score - left.score;
+      });
   }, [effectiveAge, matchesFilters, posts]);
 
   // Metadata-only posts (see contentOmitted) fetch their full text on demand,

@@ -50,6 +50,12 @@ test("rotates every company through bounded Apify inputs", () => {
   assert.ok(input.searchQueries[0].length > 20, "generic hiring query present");
   assert.ok(input.searchQueries[1].includes("engineer"), "technical query present");
   assert.ok(input.searchQueries[2].includes("account executive"), "non-technical query present");
+  // IC finance titles had no query of their own, so "Financial Analyst" never
+  // surfaced while manager-level finance roles did. maxPosts is per query, so
+  // these ride the business family's existing, under-used budget.
+  assert.ok(input.searchQueries[2].includes("financial analyst"), "finance IC query present");
+  assert.ok(input.searchQueries[2].includes("hiring an analyst"), "generic analyst query present");
+  assert.equal(input.searchQueries.length, 3, "still three query families - no extra per-query budget");
   assert.ok(hiringPostCompanyBatches.every((batch) => (
     batch.length <= hiringPostMaxCompaniesPerBatch
   )));
