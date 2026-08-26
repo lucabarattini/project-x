@@ -629,7 +629,14 @@ export function JobDashboard({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <p className="mr-1 text-sm font-bold text-slate-900 dark:text-slate-100">
+          {/* The count belongs to the results still on screen, so it is stale
+              for the same few hundred milliseconds and must not be read as the
+              answer to the filter just applied. */}
+          <p
+            className={`mr-1 text-sm font-bold text-slate-900 dark:text-slate-100 transition-opacity duration-150 ${
+              isPending ? "opacity-40" : "opacity-100"
+            }`}
+          >
             {total.toLocaleString("en-US")} roles
             <span className="font-medium text-slate-500 dark:text-slate-400"> · {companiesInResults} companies</span>
           </p>
@@ -794,7 +801,16 @@ export function JobDashboard({
               </p>
             ) : null}
 
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {/* Filtering is a server round-trip, so the previous page of results
+                stays mounted for a few hundred milliseconds. Rendering it at
+                full strength read as "the filter did nothing" — the rows have
+                to look superseded while the new ones are on their way. */}
+            <div
+              aria-busy={isPending}
+              className={`divide-y divide-slate-100 dark:divide-slate-800 transition-opacity duration-150 ${
+                isPending ? "pointer-events-none opacity-40" : "opacity-100"
+              }`}
+            >
               {results.map((job) => (
                 <article className="group px-4 py-4 transition-colors duration-150 hover:bg-slate-50 dark:hover:bg-slate-800/60 sm:px-5" key={job.id}>
                   <div className="flex items-start gap-3.5">
