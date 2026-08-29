@@ -32,15 +32,24 @@ const usStateCodes = [
 ];
 
 const outsideUsNames = [
-  "Argentina", "Australia", "Austria", "Belgium", "Brazil", "Canada",
-  "Chile", "China", "Colombia", "Czechia", "Denmark", "Egypt", "Finland",
-  "France", "Germany", "Greece", "Hong Kong", "Hungary", "India",
-  "Indonesia", "Ireland", "Israel", "Italy", "Japan", "Malaysia", "Mexico",
-  "Netherlands", "New Zealand", "Norway", "Philippines", "Poland", "Portugal",
-  "Romania", "Saudi Arabia", "Singapore", "South Africa", "South Korea",
-  "Spain", "Sweden", "Switzerland", "Taiwan", "Thailand", "Turkey",
-  "United Arab Emirates", "United Kingdom", "Vietnam", "Europe", "EMEA",
-  "APAC", "Middle East", "European Union", "Türkiye", "UK", "U.K.",
+  "Albania", "Argentina", "Australia", "Austria", "Bangladesh", "Belarus",
+  "Belgium", "Bolivia", "Bosnia", "Brazil", "Britain", "Bulgaria", "Cambodia",
+  "Canada", "Chile", "China", "Colombia", "Costa Rica", "Croatia", "Cyprus",
+  "Czech Republic", "Czechia", "Denmark", "Dominican Republic", "Ecuador",
+  "Egypt", "England", "Estonia", "Ethiopia", "Finland", "France", "Germany",
+  "Ghana", "Greece", "Guatemala", "Hong Kong", "Hungary", "Iceland", "India",
+  "Indonesia", "Ireland", "Israel", "Italy", "Japan", "Kazakhstan", "Kenya",
+  "Kuwait", "Latvia", "Lithuania", "Luxembourg", "Malaysia", "Malta", "Mexico",
+  "Moldova", "Morocco", "Myanmar", "Nepal", "Netherlands", "New Zealand",
+  "Nigeria", "Northern Ireland", "Norway", "Oman", "Pakistan", "Paraguay",
+  "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia",
+  "Saudi Arabia", "Scotland", "Serbia", "Singapore", "Slovakia", "Slovenia",
+  "South Africa", "South Korea", "Spain", "Sri Lanka", "Sweden", "Switzerland",
+  "Taiwan", "Thailand", "Tunisia", "Turkey", "Türkiye", "Ukraine",
+  "United Arab Emirates", "United Kingdom", "Uruguay", "Venezuela", "Vietnam",
+  "Wales", "APAC", "Asia Pacific", "Benelux", "DACH", "EMEA", "Europe",
+  "European Union", "LATAM", "Latin America", "Middle East", "Nordics",
+  "Southeast Asia", "U.K.", "UK",
 ];
 
 /**
@@ -49,10 +58,15 @@ const outsideUsNames = [
  * with no country anywhere in the text. Such a post scored no signal either
  * way, landed on "unknown", and "unknown" is shown in the U.S. feed.
  *
+ * The list also backstops the country list for towns too small to appear in
+ * it — a Prague-area warehouse post naming only "Dobrovíz" is caught by
+ * "Czech Republic" in the sentence, but a post naming the town alone is not.
+ *
  * Only cities without a meaningful U.S. namesake are listed. Dublin, Vienna,
- * Cambridge, Birmingham, Manchester, Athens, Rome and Naples are deliberately
- * absent: each is also a U.S. city, and a false "outside-us" silently hides a
- * real lead, which is the worse failure of the two.
+ * Cambridge, Birmingham, Manchester, Athens, Rome, Naples, Bristol, Glasgow,
+ * Perth, Lima and Hamburg are deliberately absent: each is also a U.S. city,
+ * and a false "outside-us" silently hides a real lead, which is the worse
+ * failure of the two.
  */
 const outsideUsCities = [
   // India — the gap this list was added for.
@@ -64,20 +78,36 @@ const outsideUsCities = [
   "London", "Amsterdam", "Barcelona", "Madrid", "Munich", "Berlin", "Paris",
   "Warsaw", "Krakow", "Lisbon", "Bucharest", "Prague", "Zurich", "Geneva",
   "Stockholm", "Copenhagen", "Helsinki", "Oslo", "Milan", "Edinburgh",
+  "Brno", "Bratislava", "Budapest", "Zagreb", "Belgrade", "Ljubljana",
+  "Kyiv", "Kiev", "Vilnius", "Riga", "Tallinn", "Wroclaw", "Wrocław",
+  "Gdansk", "Gdańsk", "Frankfurt", "Düsseldorf", "Dusseldorf", "Utrecht",
+  "Eindhoven", "Brussels", "Marseille", "Toulouse", "Bordeaux", "Basel",
+  "Reykjavik", "Thessaloniki", "Porto", "Turin", "Bologna",
   // Middle East & Africa
   "Tel Aviv", "Dubai", "Abu Dhabi", "Riyadh", "Cairo", "Nairobi", "Lagos",
-  "Johannesburg", "Cape Town",
+  "Johannesburg", "Cape Town", "Doha", "Muscat", "Kuwait City", "Istanbul",
+  "Ankara", "Casablanca", "Accra", "Addis Ababa",
   // APAC
   "Tokyo", "Seoul", "Shanghai", "Beijing", "Shenzhen", "Taipei", "Sydney",
   "Melbourne", "Manila", "Bangkok", "Jakarta", "Kuala Lumpur", "Ho Chi Minh",
+  "Osaka", "Kyoto", "Guangzhou", "Chengdu", "Hangzhou", "Hanoi", "Auckland",
+  "Brisbane", "Karachi", "Lahore", "Islamabad", "Dhaka", "Colombo", "Almaty",
   // LATAM
   "Sao Paulo", "São Paulo", "Buenos Aires", "Bogota", "Bogotá",
-  "Mexico City", "Guadalajara", "Santiago",
+  "Mexico City", "Guadalajara", "Santiago", "Monterrey", "Montevideo",
+  "Medellin", "Medellín", "Quito",
 ];
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
+
+/**
+ * Regions a U.S. post names instead of a state. "New England" has to be here
+ * rather than only in the shadow list below: blanking it for the outside test
+ * without scoring it as domestic left such a post with no signal at all.
+ */
+const usRegionPattern = /\b(?:New England|Bay Area|Silicon Valley|Pacific Northwest|Puerto Rico)\b/iu;
 
 const usStatePattern = new RegExp(`\\b(?:${usStateNames.map(escapeRegex).join("|")})\\b`, "iu");
 const usStateCodePattern = new RegExp(`,\\s*(?:${usStateCodes.join("|")})\\b`, "u");
@@ -86,11 +116,23 @@ const outsideUsPattern = new RegExp(
   "iu",
 );
 
+/**
+ * Two U.S. places spell an entry of the outside list inside themselves:
+ * "New Mexico" contains Mexico, "New England" contains England. Left alone
+ * they hand a Santa Fe or a Boston post a foreign signal. Blank them before
+ * the outside test — the U.S. test runs on the untouched text, so the state
+ * and the region still register as domestic.
+ */
+const usPhrasesShadowingOutsideNames = /\bNew (?:Mexico|England)\b/giu;
+
 function locationStatus(text: string) {
   const hasUsSignal = /\b(?:United States|USA|U\.S\.A?\.)\b/iu.test(text)
     || usStatePattern.test(text)
-    || usStateCodePattern.test(text);
-  const hasOutsideSignal = outsideUsPattern.test(text.replace(/\bNew Mexico\b/giu, " "));
+    || usStateCodePattern.test(text)
+    || usRegionPattern.test(text);
+  const hasOutsideSignal = outsideUsPattern.test(
+    text.replace(usPhrasesShadowingOutsideNames, " "),
+  );
 
   if (hasUsSignal && hasOutsideSignal) return "unknown" as const;
   if (hasUsSignal) return "us" as const;
@@ -111,10 +153,10 @@ function locationLabel(text: string, status: HiringPostLocation["status"]) {
   const fragment = explicitLocationFragment(text);
   if (fragment) return fragment;
 
-  const state = text.match(usStatePattern)?.[0];
+  const state = text.match(usStatePattern)?.[0] ?? text.match(usRegionPattern)?.[0];
   if (state) return state;
 
-  const country = text.match(outsideUsPattern)?.[0];
+  const country = text.replace(usPhrasesShadowingOutsideNames, " ").match(outsideUsPattern)?.[0];
   if (country) return country;
 
   return status === "us" ? "United States" : "Location not verified";

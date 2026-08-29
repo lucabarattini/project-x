@@ -73,3 +73,37 @@ test("city names shared with U.S. towns still read as U.S. when a state is given
 test("a post with no location signal at all stays unknown", () => {
   assert.equal(inferLocation("Remote role, apply now").status, "unknown");
 });
+
+test("a post naming a country the list had missed is not U.S.", () => {
+  // Reported from the live feed: an Amazon Dobrovíz post said "Czech Republic"
+  // in plain text, but only "Czechia" was listed, so it scored no signal, fell
+  // to "unknown", and "unknown" is shown in the U.S. feed.
+  const post = inferLocation(
+    "I'm hiring! I'm looking for a Workplace Health & Safety Specialist "
+      + "(Specialista BOZP) to join my team at Amazon in Dobrovíz, Czech Republic.",
+  );
+  assert.equal(post.status, "outside-us");
+  assert.equal(post.label, "Czech Republic");
+
+  for (const country of [
+    "Czech Republic", "Slovakia", "Croatia", "Bulgaria", "Ukraine", "Estonia",
+    "Pakistan", "Nigeria", "Qatar", "Uruguay", "Iceland", "Scotland",
+  ]) {
+    assert.equal(
+      inferLocation(`We are hiring in ${country}`).status,
+      "outside-us",
+      `${country} should read as outside the U.S.`,
+    );
+  }
+});
+
+test("U.S. places that spell a foreign name inside themselves stay U.S.", () => {
+  // "New Mexico" contains Mexico and "New England" contains England; both are
+  // blanked before the outside-U.S. test so domestic posts keep their status.
+  assert.equal(inferLocation("Hiring in Albuquerque, New Mexico").status, "us");
+  assert.equal(inferLocation("Our New England sites are hiring").status, "us");
+  assert.equal(inferLocation("Roles across New England and New Mexico").status, "us");
+
+  // The label must not fall back to the shadowed country either.
+  assert.notEqual(inferLocation("Hiring across New England, MA").label, "England");
+});
