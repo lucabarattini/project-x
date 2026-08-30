@@ -11,7 +11,8 @@
     "generate:logos": "node scripts/generate-company-logos.mjs",
     "sync:apify-hiring": "tsx scripts/sync-apify-hiring-task.ts",
     "verify:posted-dates": "node scripts/verify-posted-dates.mjs",
-    "verify:google-dates": "tsx scripts/verify-google-posted-dates.ts"
+    "verify:google-dates": "tsx scripts/verify-google-posted-dates.ts",
+    "search:hiring-posts": "tsx scripts/search-hiring-posts.ts"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",

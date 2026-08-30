@@ -1,34 +1,20 @@
 import "server-only";
 
-import { emptyHiringPostFeed } from "./feed";
+import {
+  apifyApiBase,
+  apifyId,
+  authorizationHeaders,
+  readHiringPostFeed,
+  writeHiringPostFeed,
+} from "./apify-client";
 import {
   buildLinkedinPostSearchInput,
   nextHiringPostCompanyBatchIndex,
   type HiringPostSearchWindow,
 } from "./search-config";
-import type { ApifyLinkedinPost, HiringPostFeed } from "./types";
+import type { ApifyLinkedinPost } from "./types";
 
-const apifyApiBase = "https://api.apify.com/v2";
-const feedRecordKey = "HIRING_POSTS_FEED";
-
-function requiredEnvironment(name: "APIFY_TOKEN" | "APIFY_STORE_ID") {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} is not configured`);
-  return value;
-}
-
-function authorizationHeaders() {
-  return {
-    authorization: `Bearer ${requiredEnvironment("APIFY_TOKEN")}`,
-  };
-}
-
-function apifyId(value: string, label: string) {
-  if (!/^[A-Za-z0-9_-]{6,80}$/u.test(value)) {
-    throw new Error(`Invalid ${label}`);
-  }
-  return value;
-}
+export { readHiringPostFeed, writeHiringPostFeed };
 
 export function isApifyConfigured() {
   return Boolean(process.env.APIFY_TOKEN?.trim() && process.env.APIFY_STORE_ID?.trim());
@@ -36,40 +22,6 @@ export function isApifyConfigured() {
 
 export function expectedApifyTaskId() {
   return process.env.APIFY_TASK_ID?.trim() || null;
-}
-
-export async function readHiringPostFeed(): Promise<HiringPostFeed> {
-  const storeId = encodeURIComponent(requiredEnvironment("APIFY_STORE_ID"));
-  const response = await fetch(
-    `${apifyApiBase}/key-value-stores/${storeId}/records/${feedRecordKey}`,
-    { cache: "no-store", headers: authorizationHeaders() },
-  );
-
-  if (response.status === 404) return emptyHiringPostFeed();
-  if (!response.ok) throw new Error(`Apify feed read failed with ${response.status}`);
-
-  const value = await response.json() as Partial<HiringPostFeed>;
-  if (value.version !== 1 || !Array.isArray(value.posts)) {
-    throw new Error("Apify feed record has an unsupported shape");
-  }
-  return value as HiringPostFeed;
-}
-
-export async function writeHiringPostFeed(feed: HiringPostFeed) {
-  const storeId = encodeURIComponent(requiredEnvironment("APIFY_STORE_ID"));
-  const response = await fetch(
-    `${apifyApiBase}/key-value-stores/${storeId}/records/${feedRecordKey}`,
-    {
-      method: "PUT",
-      cache: "no-store",
-      headers: {
-        ...authorizationHeaders(),
-        "content-type": "application/json; charset=utf-8",
-      },
-      body: JSON.stringify(feed),
-    },
-  );
-  if (!response.ok) throw new Error(`Apify feed write failed with ${response.status}`);
 }
 
 export async function fetchActorRunPosts(runId: string): Promise<ApifyLinkedinPost[]> {
