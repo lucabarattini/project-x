@@ -18,12 +18,13 @@ import {
 } from "./targets";
 
 test("derives every hiring-post company from the configured job boards", () => {
-  assert.equal(hiringPostCompanies.length, 89);
+  assert.equal(hiringPostCompanies.length, 90);
   assert.ok(hiringPostCompanies.includes("Amazon"));
   assert.ok(hiringPostCompanies.includes("DoorDash"));
   assert.ok(hiringPostCompanies.includes("Google"));
   assert.ok(hiringPostCompanies.includes("OpenAI"));
   assert.ok(hiringPostCompanies.includes("Jane Street"));
+  assert.ok(hiringPostCompanies.includes("Microsoft"));
   assert.ok(hiringPostCompanies.includes("Zillow"));
 });
 

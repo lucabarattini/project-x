@@ -4,6 +4,7 @@ import customCareerBoards from "../../../data/custom-careers-boards.json";
 import googleBoards from "../../../data/google-boards.json";
 import greenhouseBoards from "../../../data/greenhouse-boards.json";
 import leverBoards from "../../../data/lever-boards.json";
+import microsoftBoards from "../../../data/microsoft-boards.json";
 import workdayBoards from "../../../data/workday-boards.json";
 
 type HiringBoard = {
@@ -20,6 +21,7 @@ const boards: HiringBoard[] = [
   ...googleBoards,
   ...greenhouseBoards,
   ...leverBoards,
+  ...microsoftBoards,
   ...workdayBoards,
 ];
 

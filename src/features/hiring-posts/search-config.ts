@@ -37,8 +37,9 @@ export const hiringPostScheduledMaxPosts = Number.isFinite(envMaxPosts) && envMa
   ? Math.min(envMaxPosts, 50)
   : 10;
 /**
- * Sized so the rotation tiles the 24h postedLimit window exactly: 88 companies
- * at 16 per batch is 6 batches, and 6 x the 4h cadence is a 24h cycle. At 20
+ * Sized so the rotation tiles the 24h postedLimit window exactly: any list of
+ * 81 to 96 companies at 16 per batch is 6 batches, and 6 x the 4h cadence is a
+ * 24h cycle. Crossing either end of that range retimes the cycle. At 20
  * per batch the cycle was 20h against a 24h window, so 4h of every window was
  * re-fetched and re-billed each pass. Going lower opens a gap instead: 7
  * batches is a 28h cycle, and posts inside the missing 4h are never seen.

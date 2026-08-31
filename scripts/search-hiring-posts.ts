@@ -9,11 +9,13 @@ import { mergeHiringPostFeed } from "../src/features/hiring-posts/feed";
 import { normalizeHiringPosts } from "../src/features/hiring-posts/normalize";
 import {
   buildTargetedPostSearchInput,
+  isTargetedSearchQueryFamily,
+  targetedSearchQueryFamilies,
   targetedSearchResultCeiling,
   untrackedCompanies,
 } from "../src/features/hiring-posts/targeted-search";
+import type { TargetedSearchWindow } from "../src/features/hiring-posts/targeted-search";
 import type { ApifyLinkedinPost } from "../src/features/hiring-posts/types";
-import type { HiringPostSearchWindow } from "../src/features/hiring-posts/search-config";
 
 /** Apify's pay-per-result price for this Actor, for the pre-flight estimate. */
 const usdPerResult = 0.002;
@@ -28,16 +30,33 @@ function main() {
 
   const companies = (flag("companies") ?? "DoorDash,Anthropic,Amazon")
     .split(",").map((value) => value.trim()).filter(Boolean);
-  const postedLimit = (flag("window") ?? "week") as HiringPostSearchWindow;
+  const postedLimit = (flag("window") ?? "week") as TargetedSearchWindow;
   const maxPosts = Number(flag("max-posts") ?? 25);
   const commit = process.argv.includes("--commit");
 
-  const input = buildTargetedPostSearchInput({ companies, postedLimit, maxPosts });
+  // --query= is the escape hatch for a phrasing no family covers yet; one flag
+  // is one query, and repeating it adds families (and multiplies the bill).
+  const rawQueries = process.argv
+    .filter((value) => value.startsWith("--query="))
+    .map((value) => value.slice("--query=".length))
+    .filter(Boolean);
+  const familyName = flag("queries") ?? "outreach";
+  if (rawQueries.length === 0 && !isTargetedSearchQueryFamily(familyName)) {
+    throw new Error(
+      `Unknown query family "${familyName}". Known: ${Object.keys(targetedSearchQueryFamilies).join(", ")}`,
+    );
+  }
+  const queries = rawQueries.length > 0
+    ? rawQueries
+    : targetedSearchQueryFamilies[familyName as keyof typeof targetedSearchQueryFamilies];
+
+  const input = buildTargetedPostSearchInput({ companies, queries, postedLimit, maxPosts });
   const ceiling = targetedSearchResultCeiling(input.searchQueries.length, input.maxPosts);
   const untracked = untrackedCompanies(companies);
 
   console.log(`Companies : ${companies.join(", ")}`);
-  console.log(`Queries   : ${input.searchQueries.length} outreach families`);
+  console.log(`Queries   : ${input.searchQueries.length} × ${rawQueries.length > 0 ? "custom" : familyName}`);
+  for (const query of input.searchQueries) console.log(`          · ${query}`);
   console.log(`Window    : ${input.postedLimit} · maxPosts ${input.maxPosts} per query`);
   console.log(`Ceiling   : ${ceiling} results ≈ $${(ceiling * usdPerResult).toFixed(2)} worst case`);
   if (untracked.length > 0) {

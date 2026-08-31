@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildTargetedPostSearchInput,
+  financeSearchQueries,
+  isTargetedSearchQueryFamily,
+  isTargetedSearchWindow,
+  targetedSearchQueryFamilies,
   outreachSearchQueries,
   targetedSearchMaxPostsCeiling,
   targetedSearchResultCeiling,
@@ -47,4 +51,42 @@ test("untracked companies are reported before a run, not after the bill", () => 
 
 test("the result ceiling multiplies per query, matching how maxPosts is applied", () => {
   assert.equal(targetedSearchResultCeiling(2, 25), 50);
+});
+
+test("names a query family so a run can be aimed at a discipline", () => {
+  assert.ok(isTargetedSearchQueryFamily("finance"));
+  assert.ok(isTargetedSearchQueryFamily("outreach"));
+  assert.equal(isTargetedSearchQueryFamily("accounting"), false);
+  assert.equal(targetedSearchQueryFamilies.finance, financeSearchQueries);
+});
+
+test("every finance phrase carries hiring intent and the discipline together", () => {
+  // A phrase with only one of the two halves is what floods the run with
+  // noise, so neither may appear alone in a family aimed at a discipline.
+  const intent = /hiring|opening|join|team is/iu;
+  const discipline = /account|audit|financial|finance|controller|fp&a/iu;
+  for (const query of financeSearchQueries) {
+    for (const phrase of query.split(" OR ")) {
+      assert.ok(intent.test(phrase), `no hiring intent in ${phrase}`);
+      assert.ok(discipline.test(phrase), `no finance discipline in ${phrase}`);
+    }
+  }
+});
+
+test("a family builds the same input shape as a hand-written query list", () => {
+  const input = buildTargetedPostSearchInput({
+    companies: ["Amazon"],
+    queries: targetedSearchQueryFamilies.finance,
+  });
+  assert.deepEqual(input.searchQueries, [...financeSearchQueries]);
+  assert.equal(targetedSearchResultCeiling(input.searchQueries.length, input.maxPosts), 75);
+});
+
+test("a window typo is refused before the Actor is billed for it", () => {
+  assert.ok(isTargetedSearchWindow("3months"));
+  assert.equal(isTargetedSearchWindow("2months"), false);
+  assert.throws(
+    () => buildTargetedPostSearchInput({ companies: ["Amazon"], postedLimit: "2months" as never }),
+    /Unknown window/u,
+  );
 });
