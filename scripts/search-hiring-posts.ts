@@ -33,6 +33,9 @@ function main() {
   const postedLimit = (flag("window") ?? "week") as TargetedSearchWindow;
   const maxPosts = Number(flag("max-posts") ?? 25);
   const commit = process.argv.includes("--commit");
+  // Reporting is for companies the feed does not track. Their posts would be
+  // billed and then dropped at normalization, so print them instead of merging.
+  const report = process.argv.includes("--report");
 
   // --query= is the escape hatch for a phrasing no family covers yet; one flag
   // is one query, and repeating it adds families (and multiplies the bill).
@@ -59,16 +62,52 @@ function main() {
   for (const query of input.searchQueries) console.log(`          · ${query}`);
   console.log(`Window    : ${input.postedLimit} · maxPosts ${input.maxPosts} per query`);
   console.log(`Ceiling   : ${ceiling} results ≈ $${(ceiling * usdPerResult).toFixed(2)} worst case`);
-  if (untracked.length > 0) {
+  if (untracked.length > 0 && !report) {
     console.log(
       `\n⚠ Not target companies, their posts are dropped at ingest: ${untracked.join(", ")}`,
     );
+    console.log("  Add --report to print the results instead of ingesting them.");
   }
   if (!commit) {
     console.log("\nDry run. Re-run with --commit to spend the above and ingest the results.");
     return;
   }
-  return run(input);
+  return report ? runReport(input) : run(input);
+}
+
+/** Reads the discipline out of a post so the report can lead with it. */
+const financeTitles = /\b(?:financial analyst|staff accountant|senior accountant|accounting manager|accountant|internal audit(?:or)?|audit manager|auditor|financial reporting|technical accounting|finance manager|financial controller|controller|FP&A|accounts payable|accounts receivable|revenue accounting|tax manager|assurance)\b/giu;
+
+async function runReport(input: ReturnType<typeof buildTargetedPostSearchInput>) {
+  console.log("\nRunning the Actor (report only — nothing is written to the feed)…");
+  const rawPosts = await runPostSearchActor(input) as ApifyLinkedinPost[];
+  console.log(`Actor returned ${rawPosts.length} posts ≈ $${(rawPosts.length * usdPerResult).toFixed(2)}\n`);
+
+  const seen = new Set<string>();
+  const rows = rawPosts
+    .filter((post) => {
+      const key = post.linkedinUrl ?? post.id ?? "";
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((post) => {
+      const text = (post.content ?? "").replace(/\s+/gu, " ").trim();
+      const titles = [...new Set((text.match(financeTitles) ?? []).map((t) => t.toLowerCase()))];
+      return { post, text, titles };
+    })
+    // A post naming an accounting title is the whole point; the rest is context.
+    .sort((left, right) => right.titles.length - left.titles.length);
+
+  for (const { post, text, titles } of rows) {
+    console.log("=".repeat(78));
+    console.log(`${post.author?.name ?? "—"}${titles.length > 0 ? `  →  ${titles.join(", ")}` : ""}`);
+    console.log(`  ${post.author?.info ?? "—"}`);
+    console.log(`  ${post.postedAt?.date?.slice(0, 10) ?? "—"} · ${post.linkedinUrl ?? "—"}`);
+    console.log(`  ${text.slice(0, 500)}`);
+  }
+  console.log("=".repeat(78));
+  console.log(`${rows.length} unique posts · ${rows.filter((row) => row.titles.length > 0).length} name an accounting, audit or analyst title.`);
 }
 
 async function run(input: ReturnType<typeof buildTargetedPostSearchInput>) {
