@@ -140,3 +140,25 @@ test("a bare U.S. city settles a post with no state or country", () => {
   // The ambiguous names stay out, so they keep resolving through other signals.
   assert.equal(inferLocation("Our Dublin team is hiring").status, "unknown");
 });
+
+test("a country flag settles a city name that two countries share", () => {
+  // Dublin is deliberately absent from both city lists — Ohio and California
+  // have one — so the flag was the only thing settling these Meta posts.
+  const dublin = inferLocation("Hiring a Revenue Accounting Manager for Meta's Finance team in Dublin 🇮🇪");
+  assert.equal(dublin.status, "outside-us");
+  assert.equal(dublin.label, "Ireland");
+
+  assert.equal(inferLocation("Hiring an accountant in Dublin, Ohio").status, "us");
+  assert.equal(inferLocation("We're hiring a Statutory Accounting Manager in Dublin!").status, "unknown");
+});
+
+test("a flag reads as a location signal on its own", () => {
+  assert.equal(inferLocation("We're hiring a Financial Analyst 🇩🇪 Apply now").status, "outside-us");
+  assert.equal(inferLocation("We're hiring a Senior Accountant 🇺🇸").status, "us");
+});
+
+test("two flags settle nothing, and the label may not pick one", () => {
+  const both = inferLocation("Hiring across 🇺🇸 and 🇬🇧");
+  assert.equal(both.status, "unknown");
+  assert.equal(both.label, "Location not verified");
+});

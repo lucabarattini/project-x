@@ -155,15 +155,46 @@ const outsideUsPattern = new RegExp(
  */
 const usPhrasesShadowingOutsideNames = /\bNew (?:Mexico|England)\b/giu;
 
+/**
+ * A country flag is a pair of regional indicator symbols encoding an ISO 3166
+ * code — 🇮🇪 is U+1F1EE U+1F1EA, "IE". Two Meta posts advertised Dublin roles,
+ * and the flag was the only thing in either post that settled which Dublin:
+ * the city lists leave it out on purpose, because Ohio and California have one
+ * too. Flags are unusually trustworthy for this — nobody types one by accident
+ * — so they count as a location signal in their own right.
+ */
+const flagEmojiPattern = /[\u{1F1E6}-\u{1F1FF}]{2}/gu;
+const regionalIndicatorBase = 0x1f1e6;
+const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
+
+function countryCodesFromFlags(text: string) {
+  return [...text.matchAll(flagEmojiPattern)].map((match) => [...match[0]]
+    .map((char) => String.fromCodePoint(
+      "A".codePointAt(0)! + (char.codePointAt(0)! - regionalIndicatorBase),
+    ))
+    .join(""));
+}
+
+function countryNameFromCode(code: string) {
+  try {
+    const name = regionNames.of(code);
+    return name && name !== code ? name : null;
+  } catch {
+    return null;
+  }
+}
+
 function locationStatus(text: string) {
+  const flagCodes = countryCodesFromFlags(text);
   const hasUsSignal = /\b(?:United States|USA|U\.S\.A?\.)\b/iu.test(text)
     || usStatePattern.test(text)
     || usStateCodePattern.test(text)
     || usRegionPattern.test(text)
-    || usCityPattern.test(text);
+    || usCityPattern.test(text)
+    || flagCodes.includes("US");
   const hasOutsideSignal = outsideUsPattern.test(
     text.replace(usPhrasesShadowingOutsideNames, " "),
-  );
+  ) || flagCodes.some((code) => code !== "US" && countryNameFromCode(code) !== null);
 
   if (hasUsSignal && hasOutsideSignal) return "unknown" as const;
   if (hasUsSignal) return "us" as const;
@@ -212,6 +243,14 @@ function locationLabel(text: string, status: HiringPostLocation["status"]) {
 
   const country = text.replace(usPhrasesShadowingOutsideNames, " ").match(outsideUsPattern)?.[0];
   if (country) return country;
+
+  if (status === "outside-us") {
+    const flagged = countryCodesFromFlags(text)
+      .filter((code) => code !== "US")
+      .map(countryNameFromCode)
+      .find((name) => name !== null);
+    if (flagged) return flagged;
+  }
 
   return status === "us" ? "United States" : "Location not verified";
 }
