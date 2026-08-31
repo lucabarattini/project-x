@@ -107,3 +107,36 @@ test("U.S. places that spell a foreign name inside themselves stay U.S.", () => 
   // The label must not fall back to the shadowed country either.
   assert.notEqual(inferLocation("Hiring across New England, MA").label, "England");
 });
+
+test("a 📍 introducing prose is not treated as a location", () => {
+  // From the live feed: an Amazon Accounting post used the pin to open a list
+  // of recruiting events. The whole blurb became the label, and because status
+  // was read from that fragment alone the post — which names Boston and Los
+  // Angeles — was filed as "unknown" and shown as "Location not verified".
+  const post = inferLocation(
+    "Amazon accounting is hiring, and we're looking for curious, driven people. "
+      + "📍 We're hosting networking events this fall: Boston — Sept 23 HQ2 — Sept 24 "
+      + "Los Angeles — Oct 21 Come say hi, ask questions, and see if it's the right fit.",
+  );
+  assert.equal(post.status, "us");
+  assert.equal(post.label, "Boston");
+  assert.ok(post.label.length < 40, "a location label must not be a paragraph");
+});
+
+test("a 📍 that really does introduce a location still wins", () => {
+  assert.equal(inferLocation("We are hiring! 📍 Seattle, WA").label, "Seattle, WA");
+  assert.equal(inferLocation("📍 Location: Hyderabad, India").status, "outside-us");
+  assert.equal(inferLocation("📍 London, United Kingdom").status, "outside-us");
+});
+
+test("a bare U.S. city settles a post with no state or country", () => {
+  for (const city of ["Boston", "Denver", "Atlanta", "Bellevue", "HQ2"]) {
+    assert.equal(
+      inferLocation(`My team is hiring in ${city}`).status,
+      "us",
+      `${city} should read as U.S.`,
+    );
+  }
+  // The ambiguous names stay out, so they keep resolving through other signals.
+  assert.equal(inferLocation("Our Dublin team is hiring").status, "unknown");
+});

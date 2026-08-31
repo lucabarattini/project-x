@@ -109,6 +109,36 @@ function escapeRegex(value: string) {
  */
 const usRegionPattern = /\b(?:New England|Bay Area|Silicon Valley|Pacific Northwest|Puerto Rico)\b/iu;
 
+/**
+ * Cities that settle a post as domestic on their own. Plenty of U.S. posts
+ * name the office city and never the state ("networking events: Boston —
+ * Sept 23"), which scored no signal at all and landed on "unknown".
+ *
+ * Mirrors the rule the outside-U.S. city list follows, in reverse: a city
+ * with a meaningful non-U.S. namesake is left out. Dublin, Vienna, Cambridge,
+ * Birmingham, Manchester, Athens, Rome, Naples and Richmond are absent for
+ * exactly the reason they are absent there. Where a post names both a U.S.
+ * and a non-U.S. place the existing both-signals rule still returns
+ * "unknown", so a shared name degrades to "needs checking" rather than
+ * silently claiming the post.
+ */
+const usCityNames = [
+  "Boston", "Seattle", "Los Angeles", "San Francisco", "San Jose", "San Diego",
+  "New York City", "Brooklyn", "Manhattan", "Chicago", "Denver", "Austin",
+  "Atlanta", "Nashville", "Philadelphia", "Phoenix", "Detroit", "Minneapolis",
+  "Pittsburgh", "Sunnyvale", "Bellevue", "Redmond", "Cupertino", "Palo Alto",
+  "Mountain View", "Santa Monica", "Culver City", "Arlington", "Herndon",
+  "Charlotte", "Raleigh", "Tampa", "Orlando", "Jacksonville", "Columbus",
+  "Dallas", "Houston", "Kansas City", "St. Louis", "Tempe", "Indianapolis",
+  "Oklahoma City", "New Orleans", "Charleston", "Las Vegas", "Salt Lake City",
+  "Portland", "Sacramento", "Baltimore", "Milwaukee", "Cincinnati",
+  "Cleveland", "Memphis", "Louisville", "Hoboken", "Sunnyvale",
+  // Amazon writes its Arlington, VA headquarters this way.
+  "HQ2",
+];
+
+const usCityPattern = new RegExp(`\\b(?:${usCityNames.map(escapeRegex).join("|")})\\b`, "iu");
+
 const usStatePattern = new RegExp(`\\b(?:${usStateNames.map(escapeRegex).join("|")})\\b`, "iu");
 const usStateCodePattern = new RegExp(`,\\s*(?:${usStateCodes.join("|")})\\b`, "u");
 const outsideUsPattern = new RegExp(
@@ -129,7 +159,8 @@ function locationStatus(text: string) {
   const hasUsSignal = /\b(?:United States|USA|U\.S\.A?\.)\b/iu.test(text)
     || usStatePattern.test(text)
     || usStateCodePattern.test(text)
-    || usRegionPattern.test(text);
+    || usRegionPattern.test(text)
+    || usCityPattern.test(text);
   const hasOutsideSignal = outsideUsPattern.test(
     text.replace(usPhrasesShadowingOutsideNames, " "),
   );
@@ -140,20 +171,43 @@ function locationStatus(text: string) {
   return "unknown" as const;
 }
 
+/**
+ * A 📍 does not always introduce a place. One Amazon post used it to open a
+ * list of recruiting events — "📍 We're hosting networking events this fall:
+ * Boston — Sept 23 HQ2 — Sept 24 …" — and 220 characters of prose became the
+ * post's location label. Worse, status was read from that fragment alone, so
+ * a post naming two U.S. cities was filed as "unknown".
+ *
+ * A real location fragment is short and starts with a place, not a sentence.
+ */
+const locationFragmentMaxLength = 80;
+
+const prosePrefix = /^(?:we|i|our|my|come|join|feel free|apply|tag|dm|share|check|click|hiring|looking)\b/iu;
+
+function plausibleLocationFragment(fragment: string) {
+  const head = fragment.split(/[.:;!?]/u)[0].trim().replace(/[,·|-]+$/u, "").trim();
+  if (head.length < 2 || head.length > locationFragmentMaxLength) return null;
+  if (prosePrefix.test(head)) return null;
+  return head;
+}
+
 function explicitLocationFragment(text: string) {
   const labeled = text.match(
     /(?:📍\s*(?:Open\s+)?Locations?\s*:?\s*|(?:Open\s+)?\bLocations?\s*:\s*)([^\r\n]{2,220})/iu,
   )?.[1]?.trim();
-  if (labeled) return labeled;
+  if (labeled) return plausibleLocationFragment(labeled);
 
-  return text.match(/📍\s*([^\r\n]{2,220})/u)?.[1]?.trim() ?? null;
+  const pinned = text.match(/📍\s*([^\r\n]{2,220})/u)?.[1]?.trim();
+  return pinned ? plausibleLocationFragment(pinned) : null;
 }
 
 function locationLabel(text: string, status: HiringPostLocation["status"]) {
   const fragment = explicitLocationFragment(text);
   if (fragment) return fragment;
 
-  const state = text.match(usStatePattern)?.[0] ?? text.match(usRegionPattern)?.[0];
+  const state = text.match(usStatePattern)?.[0]
+    ?? text.match(usRegionPattern)?.[0]
+    ?? text.match(usCityPattern)?.[0];
   if (state) return state;
 
   const country = text.replace(usPhrasesShadowingOutsideNames, " ").match(outsideUsPattern)?.[0];
@@ -173,10 +227,15 @@ export function inferLocation(text: string, structuredLocations: string[] = []):
   }
 
   const explicitLocation = explicitLocationFragment(text);
-  const locationText = explicitLocation ?? text;
-  const status = locationStatus(locationText);
+
+  // The fragment is the best label when it exists, but it is a slice of the
+  // post rather than the whole evidence. Reading status from it alone filed a
+  // post as "unknown" whenever the place was stated outside the pin, so fall
+  // back to the full text when the fragment settles nothing.
+  const fragmentStatus = explicitLocation ? locationStatus(explicitLocation) : "unknown";
+  const status = fragmentStatus === "unknown" ? locationStatus(text) : fragmentStatus;
   return {
-    label: explicitLocation ?? locationLabel(locationText, status),
+    label: explicitLocation ?? locationLabel(text, status),
     status,
     confidence: status === "unknown" ? "unknown" : "text",
   };
