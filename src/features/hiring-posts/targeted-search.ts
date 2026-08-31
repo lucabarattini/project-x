@@ -3,7 +3,7 @@ import { hiringPostCompanies } from "./targets";
 /**
  * A one-off, hand-aimed search — separate from the scheduled rotation.
  *
- * The scheduled task tiles all 90 companies across a 24h cycle with three
+ * The scheduled task tiles all 93 companies across a 24h cycle with three
  * broad query families, which is the right shape for standing coverage and
  * the wrong shape for "find me people at these three companies who said DM
  * me". This builds an input for that second question and nothing else: it is

@@ -1,9 +1,12 @@
 import amazonBoards from "../../../data/amazon-boards.json";
+import appleBoards from "../../../data/apple-boards.json";
 import ashbyBoards from "../../../data/ashby-boards.json";
 import customCareerBoards from "../../../data/custom-careers-boards.json";
+import expediaBoards from "../../../data/expedia-boards.json";
 import googleBoards from "../../../data/google-boards.json";
 import greenhouseBoards from "../../../data/greenhouse-boards.json";
 import leverBoards from "../../../data/lever-boards.json";
+import metaBoards from "../../../data/meta-boards.json";
 import microsoftBoards from "../../../data/microsoft-boards.json";
 import workdayBoards from "../../../data/workday-boards.json";
 
@@ -14,13 +17,23 @@ type HiringBoard = {
   apiUrl?: string;
 };
 
+/**
+ * Every catalog under data/. Missing one does not fail loudly — the company
+ * simply never becomes a hiring-post target, so its posts are billed by the
+ * Actor and then dropped as unattributable. Apple, Expedia, Meta and Microsoft
+ * each sat in that gap; the test below now fails if a new catalog is added and
+ * not listed here.
+ */
 const boards: HiringBoard[] = [
   ...amazonBoards,
+  ...appleBoards,
   ...ashbyBoards,
   ...customCareerBoards,
+  ...expediaBoards,
   ...googleBoards,
   ...greenhouseBoards,
   ...leverBoards,
+  ...metaBoards,
   ...microsoftBoards,
   ...workdayBoards,
 ];

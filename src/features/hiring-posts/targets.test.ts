@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import {
   buildLinkedinPostSearchInput,
@@ -18,13 +19,16 @@ import {
 } from "./targets";
 
 test("derives every hiring-post company from the configured job boards", () => {
-  assert.equal(hiringPostCompanies.length, 90);
+  assert.equal(hiringPostCompanies.length, 93);
   assert.ok(hiringPostCompanies.includes("Amazon"));
   assert.ok(hiringPostCompanies.includes("DoorDash"));
   assert.ok(hiringPostCompanies.includes("Google"));
   assert.ok(hiringPostCompanies.includes("OpenAI"));
   assert.ok(hiringPostCompanies.includes("Jane Street"));
   assert.ok(hiringPostCompanies.includes("Microsoft"));
+  assert.ok(hiringPostCompanies.includes("Apple"));
+  assert.ok(hiringPostCompanies.includes("Meta"));
+  assert.ok(hiringPostCompanies.includes("Expedia Group"));
   assert.ok(hiringPostCompanies.includes("Zillow"));
 });
 
@@ -89,4 +93,23 @@ test("the batch rotation tiles the postedLimit window exactly", () => {
     hiringPostCompanyBatches.length * hiringPostScanCadenceHours,
     hiringPostCompanyCycleHours,
   );
+});
+
+test("every board catalog on disk reaches the hiring-post target list", () => {
+  // Four catalogs were on disk and never imported, so their companies were
+  // billed by the Actor and dropped at normalization. Read the directory
+  // rather than a hand-kept list, so the next catalog cannot be forgotten.
+  const catalogDir = new URL("../../../data/", import.meta.url);
+  const catalogs = readdirSync(catalogDir).filter((name) => name.endsWith("-boards.json"));
+  assert.ok(catalogs.length > 0, "no board catalogs found");
+
+  const tracked = new Set(hiringPostCompanies);
+  const missing = catalogs.flatMap((name) => {
+    const entries = JSON.parse(readFileSync(new URL(name, catalogDir), "utf8"));
+    return entries
+      .map((entry: { company: string }) => entry.company)
+      .filter((company: string) => !tracked.has(company))
+      .map((company: string) => `${company} (${name})`);
+  });
+  assert.deepEqual(missing, []);
 });
