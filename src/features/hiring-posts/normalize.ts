@@ -6,6 +6,7 @@ import {
   inferLocation,
   isNonHiringNoise,
 } from "./classification";
+import { serialDigestExclusionReason } from "./digest";
 import { isKnownHiringUrl } from "./targets";
 import type {
   ApifyLinkedinPost,
@@ -122,6 +123,12 @@ export function normalizeHiringPost(
   if (nonHiringNoise || (!hiringIntent && !opportunityUrl)) {
     exclusionReasons.push("The post is not advertising a concrete open role");
   }
+  // A daily link dump passes every test above — it names a company, it links
+  // real jobs, it says "hiring" — and then fills the feed with roles nobody in
+  // it owns. It is excluded rather than dropped, so the reason is on the
+  // record and a misjudged post can be found and argued with.
+  const serialDigest = serialDigestExclusionReason(opportunityTitle, content, contactType);
+  if (serialDigest) exclusionReasons.push(serialDigest);
   if (roleFamily === "Other") reasons.push("Role family needs verification");
   else reasons.push(`${roleFamily} role`);
 

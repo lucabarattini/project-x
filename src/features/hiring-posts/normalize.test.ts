@@ -355,3 +355,32 @@ test("a post whose role cannot be identified still needs a hiring owner", () => 
   assert.equal(vague.matchStatus, "excluded");
   assert.ok(vague.exclusionReasons.includes("No actionable hiring owner or role was identified"));
 });
+
+test("archives an automated daily digest instead of letting it fill the feed", () => {
+  // The post names a tracked company, links real jobs and says "hiring", so
+  // every other test passes it. What it is not is one person's opening.
+  const post = normalizeHiringPost(rawPost({
+    content: [
+      "🚀 Amazon is Hiring! | August 14, 2026 (Part 5/5)",
+      "Fresh roles posted in the last 24 hours 👇",
+      "💼 Delivery Consultant 📍 St. Louis, Missouri 🔗 https://lnkd.in/gctS3GkG",
+      "💼 Account Manager 📍 Austin, Texas 🔗 https://lnkd.in/gSqvmpN6",
+      "🔔 Follow for daily Amazon job updates.",
+    ].join(" "),
+    author: {
+      name: "Serial Poster",
+      info: "Software Engineer II At Microsoft",
+      linkedinUrl: "https://www.linkedin.com/in/serial-poster",
+    },
+    article: null,
+  }), now);
+  assert.ok(post);
+  assert.equal(post.matchStatus, "excluded");
+  assert.ok(
+    post.exclusionReasons.some((reason) => reason.startsWith("Automated job digest")),
+    "the digest reason is on the record, not applied silently",
+  );
+  // The role family is still classified — it drives display and other
+  // filters — so the exclusion is about the post's shape, not its subject.
+  assert.notEqual(post.roleFamily, undefined);
+});
