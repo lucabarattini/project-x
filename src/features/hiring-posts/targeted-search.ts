@@ -85,6 +85,13 @@ export type TargetedSearchOptions = {
 /** Apify bills per result, so a stray zero in maxPosts is a billing event. */
 export const targetedSearchMaxPostsCeiling = 50;
 
+/**
+ * The Actor rejects more than 20 authorsCompanies with a 400. That costs
+ * nothing but a round trip, and the error arrives after the run is submitted
+ * rather than while the list is being written, so catch it here instead.
+ */
+export const targetedSearchMaxCompanies = 20;
+
 export function buildTargetedPostSearchInput({
   companies,
   queries = outreachSearchQueries,
@@ -93,6 +100,11 @@ export function buildTargetedPostSearchInput({
 }: TargetedSearchOptions) {
   if (companies.length === 0) {
     throw new Error("A targeted search needs at least one company");
+  }
+  if (companies.length > targetedSearchMaxCompanies) {
+    throw new Error(
+      `The Actor accepts at most ${targetedSearchMaxCompanies} companies, got ${companies.length}`,
+    );
   }
   if (queries.length === 0) {
     throw new Error("A targeted search needs at least one query");

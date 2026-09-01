@@ -5,6 +5,7 @@ import {
   financeSearchQueries,
   isTargetedSearchQueryFamily,
   isTargetedSearchWindow,
+  targetedSearchMaxCompanies,
   targetedSearchQueryFamilies,
   outreachSearchQueries,
   targetedSearchMaxPostsCeiling,
@@ -89,4 +90,10 @@ test("a window typo is refused before the Actor is billed for it", () => {
     () => buildTargetedPostSearchInput({ companies: ["Amazon"], postedLimit: "2months" as never }),
     /Unknown window/u,
   );
+});
+
+test("too many companies is refused here, not by a 400 after submission", () => {
+  const tooMany = Array.from({ length: targetedSearchMaxCompanies + 1 }, (_, i) => `Company ${i}`);
+  assert.throws(() => buildTargetedPostSearchInput({ companies: tooMany }), /at most 20 companies/u);
+  assert.doesNotThrow(() => buildTargetedPostSearchInput({ companies: tooMany.slice(0, 20) }));
 });
