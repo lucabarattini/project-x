@@ -589,7 +589,40 @@ export function compactExperienceEvidence(text: string) {
     .join(" ");
 }
 
+/**
+ * Apple Store floor staff. Apple's careers board prefixes every US retail
+ * posting with "US-" or "US - " — "US-Genius", "US - Specialist: Seasonal,
+ * Part-time", "US-Store Leader" — and republishes the same handful of titles
+ * per market, constantly. Sorted newest-first, which is how this portal reads
+ * the board, they were about 6% of Apple's page-one postings and landed in
+ * Needs Review, a track the default filter keeps, so a shop-floor job the
+ * portal exists to skip was one of the roles it showed most often.
+ *
+ * The prefix alone is not the test, and neither is the word after it.
+ * "Specialist" by itself is a real Apple engineering title — "Specialist,
+ * Emergency Services - Sensing & Connectivity" was posted eight times in the
+ * same sample — so the store vocabulary has to sit behind the prefix. And the
+ * vocabulary has to be the whole title: a store posting is "US-Lead", while
+ * "US - Lead Software Engineer" would be an engineering one, which is why the
+ * match ends at the title's end or its first separator. Every name in the
+ * list was read off the board; a variant that is missed costs one visible
+ * posting, while a wrong match hides a real role.
+ */
+const appleRetailStoreTitle =
+  /^\s*US\s*[-–—]\s*(?:(?:senior|sr\.?)\s+)?(?:technical\s+(?:specialist|expert)|operations\s+(?:expert|specialist|lead(?:er)?)|business\s+(?:pro|expert)|creative\s+pro|(?:store|market)\s+lead(?:er)?|specialist|expert|genius|creative|manager|lead(?:er)?)\s*(?=$|[:,(])/iu;
+
 export function classifyTechnicalRole(title: string): TechnicalClassification {
+  // Ahead of the title-pattern exclusions below, which would otherwise send
+  // "US-Manager" and "US-Store Leader" to Needs Review on the word "manager"
+  // and leave them in the default view.
+  if (appleRetailStoreTitle.test(title)) {
+    return {
+      matchedCategory: "Manual & Field Operations",
+      matchReason: "Apple Store retail posting (US- title prefix): shop-floor role, republished per market. Belongs to no portal.",
+      includedByDefault: false,
+    };
+  }
+
   for (const pattern of excludedDefaultTitlePatterns.slice(0, 12)) {
     if (pattern.test(title)) {
       return {

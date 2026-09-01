@@ -405,3 +405,49 @@ test("widening the security rule does not swallow genuinely non-technical analys
     "Analytics & Business Intelligence",
   );
 });
+
+test("Apple Store retail postings belong to no portal", () => {
+  // Apple republishes the same shop-floor titles per market under a "US-"
+  // prefix, so they were both the most repeated postings on the board and, as
+  // Needs Review, inside the default filter. Every name here was read off the
+  // live board.
+  for (const title of [
+    "US - Specialist: Seasonal, Part-time",
+    "US-Specialist (Part Time)",
+    "US-Genius",
+    "US-Expert",
+    "US-Technical Expert",
+    "US-Technical Specialist",
+    "US-Creative Pro",
+    "US-Business Pro",
+    "US-Business Expert",
+    "US-Operations Expert",
+    "US-Operations Specialist",
+    "US-Operations Lead",
+    "US-Store Leader",
+    "US-Manager",
+    "US-Senior Manager",
+    "US-Lead",
+  ]) {
+    assert.equal(
+      classifyTechnicalRole(title).matchedCategory,
+      "Manual & Field Operations",
+      `expected "${title}" to be an Apple Store retail posting`,
+    );
+  }
+  assert.deepEqual(portalAudience("Manual & Field Operations"), []);
+});
+
+test("the Apple retail rule reads the prefix and the whole title, not one word", () => {
+  // "Specialist" is a real Apple engineering title, and the prefix on its own
+  // says nothing: the store posting is "US-Lead", while a "US - Lead Software
+  // Engineer" would be an engineering role. A false archive hides a real job,
+  // which is the worse failure of the two.
+  assert.notEqual(
+    classifyTechnicalRole("Specialist, Emergency Services - Sensing & Connectivity").matchedCategory,
+    "Manual & Field Operations",
+  );
+  assert.equal(classifyTechnicalRole("US - Lead Software Engineer").matchedCategory, "Software Engineering");
+  assert.equal(classifyTechnicalRole("US - Senior Software Engineer").matchedCategory, "Software Engineering");
+  assert.equal(classifyTechnicalRole("US-Data Scientist").matchedCategory, "Data Science");
+});
