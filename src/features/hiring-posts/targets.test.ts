@@ -15,11 +15,13 @@ import {
   companyFromHiringUrl,
   companyMentionInText,
   hiringPostCompanies,
+  hiringPostExcludedCompanies,
   normalizeCompanyComparable,
 } from "./targets";
 
 test("derives every hiring-post company from the configured job boards", () => {
-  assert.equal(hiringPostCompanies.length, 93);
+  // 93 catalogued companies, less the one deliberately kept out of the feed.
+  assert.equal(hiringPostCompanies.length, 92);
   assert.ok(hiringPostCompanies.includes("Amazon"));
   assert.ok(hiringPostCompanies.includes("DoorDash"));
   assert.ok(hiringPostCompanies.includes("Google"));
@@ -95,21 +97,58 @@ test("the batch rotation tiles the postedLimit window exactly", () => {
   );
 });
 
+function catalogedCompanies() {
+  const catalogDir = new URL("../../../data/", import.meta.url);
+  const catalogs = readdirSync(catalogDir).filter((name) => name.endsWith("-boards.json"));
+  assert.ok(catalogs.length > 0, "no board catalogs found");
+  return catalogs.flatMap((name) => {
+    const entries = JSON.parse(readFileSync(new URL(name, catalogDir), "utf8"));
+    return entries.map((entry: { company: string }) => ({ company: entry.company, name }));
+  }) as Array<{ company: string; name: string }>;
+}
+
 test("every board catalog on disk reaches the hiring-post target list", () => {
   // Four catalogs were on disk and never imported, so their companies were
   // billed by the Actor and dropped at normalization. Read the directory
   // rather than a hand-kept list, so the next catalog cannot be forgotten.
-  const catalogDir = new URL("../../../data/", import.meta.url);
-  const catalogs = readdirSync(catalogDir).filter((name) => name.endsWith("-boards.json"));
-  assert.ok(catalogs.length > 0, "no board catalogs found");
-
+  //
+  // The one legitimate way to be absent is hiringPostExcludedCompanies, which
+  // the assertion below holds to the same standard: a name in that set has to
+  // exist on disk, so the exclusion stays a deliberate subtraction from a real
+  // catalog rather than a leftover nobody can trace.
   const tracked = new Set(hiringPostCompanies);
-  const missing = catalogs.flatMap((name) => {
-    const entries = JSON.parse(readFileSync(new URL(name, catalogDir), "utf8"));
-    return entries
-      .map((entry: { company: string }) => entry.company)
-      .filter((company: string) => !tracked.has(company))
-      .map((company: string) => `${company} (${name})`);
-  });
+  const missing = catalogedCompanies()
+    .filter(({ company }) => !tracked.has(company) && !hiringPostExcludedCompanies.has(company))
+    .map(({ company, name }) => `${company} (${name})`);
   assert.deepEqual(missing, []);
+});
+
+test("the signals-only exclusion keeps its companies in the portal catalogs", () => {
+  const onDisk = new Set(catalogedCompanies().map(({ company }) => company));
+  for (const company of hiringPostExcludedCompanies) {
+    assert.ok(
+      onDisk.has(company),
+      `${company} is excluded from hiring signals but no longer on any board — delete the exclusion`,
+    );
+    assert.ok(
+      !hiringPostCompanies.includes(company),
+      `${company} is excluded from hiring signals but still a search target`,
+    );
+  }
+});
+
+test("Mercor stays a job-portal company and stops being a hiring-signal one", () => {
+  // Mercor must disappear from the feed without disappearing from the portal,
+  // and the portal reads the same catalog this asserts is untouched.
+  const ashby = JSON.parse(readFileSync(
+    new URL("../../../data/ashby-boards.json", import.meta.url),
+    "utf8",
+  )) as Array<{ company: string }>;
+  assert.ok(ashby.some((board) => board.company === "Mercor"), "Mercor left the Ashby catalog");
+  assert.ok(hiringPostExcludedCompanies.has("Mercor"));
+  assert.ok(!hiringPostCompanies.includes("Mercor"));
+  // Attribution has to agree with the target list, or a post linking to a
+  // Mercor job would still be filed under a company the feed does not track.
+  assert.equal(companyFromHiringUrl("https://jobs.ashbyhq.com/mercor/abc123"), null);
+  assert.equal(companyMentionInText("Recruiter at Mercor"), null);
 });

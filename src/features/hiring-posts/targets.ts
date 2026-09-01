@@ -18,13 +18,31 @@ type HiringBoard = {
 };
 
 /**
+ * Companies the job portal keeps and Hiring Signals drops.
+ *
+ * The two features read the same data/*-boards.json catalogs, so there is no
+ * way to remove a company from the signals feed by editing a catalog: deleting
+ * the entry takes its openings out of the portal as well. This set is the one
+ * place that says "still a company we track, just not one we want posts from",
+ * and it is applied to `boards` below, so every derivation — the search
+ * rotation, company-name matching, and career-URL attribution — agrees.
+ *
+ * Mercor: its posts are recruiting-marketplace promotion rather than a named
+ * person hiring for their own team, so they crowd the feed while its portal
+ * openings stay useful.
+ */
+export const hiringPostExcludedCompanies = new Set<string>([
+  "Mercor",
+]);
+
+/**
  * Every catalog under data/. Missing one does not fail loudly — the company
  * simply never becomes a hiring-post target, so its posts are billed by the
  * Actor and then dropped as unattributable. Apple, Expedia, Meta and Microsoft
  * each sat in that gap; the test below now fails if a new catalog is added and
  * not listed here.
  */
-const boards: HiringBoard[] = [
+const catalogedBoards: HiringBoard[] = [
   ...amazonBoards,
   ...appleBoards,
   ...ashbyBoards,
@@ -37,6 +55,10 @@ const boards: HiringBoard[] = [
   ...microsoftBoards,
   ...workdayBoards,
 ];
+
+const boards = catalogedBoards.filter(
+  (board) => !hiringPostExcludedCompanies.has(board.company),
+);
 
 export function normalizeCompanyComparable(value: string) {
   return value
