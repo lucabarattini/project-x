@@ -11,7 +11,12 @@ import {
   writeHiringPostFeed,
 } from "./apify";
 import { enrichJobLinks } from "./enrichment";
-import { consolidateHiringPosts, emptyHiringPostFeed, mergeHiringPostFeed } from "./feed";
+import {
+  consolidateHiringPosts,
+  emptyHiringPostFeed,
+  isInDefaultFeedView,
+  mergeHiringPostFeed,
+} from "./feed";
 import { normalizeHiringPosts, reclassifyHiringPost } from "./normalize";
 import type { ApifyLinkedinPost, HiringPost, HiringPostFeed } from "./types";
 
@@ -30,49 +35,18 @@ function reclassifyFeed(feed: HiringPostFeed, now = new Date()): HiringPostFeed 
 }
 
 /**
- * The window the dashboard opens with. Calendar-day "today" is often nearly
- * empty, so it widens automatically until a reasonable feed size is reached —
- * mirroring the client-side fallback so the server can decide which posts get
- * their full text shipped in the initial payload.
+ * The posts the dashboard shows on arrival, so the server knows which ones get
+ * their full text in the initial payload — a post shipped as metadata renders
+ * a placeholder until its text arrives over the wire.
+ *
+ * The rule itself lives beside the feed, where it can be tested. This used to
+ * open on the calendar day and widen itself until it found six posts, a rule
+ * the client had to reimplement to stay in step; both copies are gone.
  */
-function defaultFeedWindow(posts: HiringPost[], now = new Date()) {
-  const windows = [
-    { age: "today" as const, ms: 0, calendar: true },
-    { age: "24h" as const, ms: 24 * 60 * 60 * 1000 },
-    { age: "3d" as const, ms: 3 * 24 * 60 * 60 * 1000 },
-    { age: "7d" as const, ms: 7 * 24 * 60 * 60 * 1000 },
-    { age: "14d" as const, ms: 14 * 24 * 60 * 60 * 1000 },
-    { age: "21d" as const, ms: 21 * 24 * 60 * 60 * 1000 },
-  ];
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const timestamp = now.getTime();
-
-  // Mirrors the client defaults: non-technical audience, U.S.-only region,
-  // the "To contact" queue (excluded posts are archived automatically).
-  const inDefaultView = (post: HiringPost, window: (typeof windows)[number]) => {
-    if (post.roleFamily === "Technical") return false;
-    if (post.location?.status === "outside-us") return false;
-    if (post.matchStatus === "excluded") return false;
-    const posted = Date.parse(post.postedAt);
-    if (window.calendar) return posted >= startOfToday.getTime() && timestamp - posted >= -5 * 60 * 1000;
-    return timestamp - posted >= -5 * 60 * 1000 && timestamp - posted <= window.ms;
-  };
-
-  const countFor = (window: (typeof windows)[number]) =>
-    posts.filter((post) => inDefaultView(post, window)).length;
-
-  const minimumFeedSize = 6;
-  const todayCount = countFor(windows[0]);
-  const age = todayCount >= minimumFeedSize
-    ? "today"
-    : (windows.slice(1).find((window) => countFor(window) >= minimumFeedSize) ?? windows[windows.length - 1]).age;
-  const chosen = windows.find((window) => window.age === age) ?? windows[windows.length - 1];
-
-  return {
-    age,
-    visibleIds: new Set(posts.filter((post) => inDefaultView(post, chosen)).map((post) => post.id)),
-  };
+function defaultViewPostIds(posts: HiringPost[], now = new Date()) {
+  return new Set(
+    posts.filter((post) => isInDefaultFeedView(post, now)).map((post) => post.id),
+  );
 }
 
 /**
@@ -157,7 +131,7 @@ export async function getHiringPostPageData(): Promise<HiringPostPageData> {
   if (isApifyConfigured()) {
     try {
       const feed = reclassifyFeed(await readHiringPostFeed());
-      const { visibleIds } = defaultFeedWindow(feed.posts);
+      const visibleIds = defaultViewPostIds(feed.posts);
       return {
         configured: true,
         source: "apify",
@@ -183,7 +157,7 @@ export async function getHiringPostPageData(): Promise<HiringPostPageData> {
       rawCount: fixture.length,
       now,
     });
-    const { visibleIds } = defaultFeedWindow(merged.posts, now);
+    const visibleIds = defaultViewPostIds(merged.posts, now);
     return {
       configured: false,
       source: "development-fixture",

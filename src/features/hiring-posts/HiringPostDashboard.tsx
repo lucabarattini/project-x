@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { Icon } from "@/components/ui/Icon";
 import { CompanyLogo } from "@/features/companies/CompanyLogo";
 import { FaceAvatar } from "@/features/network/FaceAvatar";
-import type { ContactType, HiringPost } from "./types";
+import type { ContactType, HiringPost, RoleFamily } from "./types";
 
 type Props = {
   configured: boolean;
@@ -18,14 +18,13 @@ type Props = {
   updatedAt: string | null;
 };
 
-type AgeFilter = "today" | "24h" | "3d" | "7d" | "14d" | "21d";
+type AgeFilter = "24h" | "3d" | "7d" | "14d" | "21d";
 type InboxView = "queue" | "contacted" | "hidden";
-type SignalAudience = "all" | "technical" | "non-technical";
 type RegionFilter = "us" | "all";
 type LeadDecision = "contacted" | "hidden";
 type LeadDecisions = Record<string, LeadDecision>;
 
-const ageMilliseconds: Record<Exclude<AgeFilter, "today">, number> = {
+const ageMilliseconds: Record<AgeFilter, number> = {
   "24h": 24 * 60 * 60 * 1000,
   "3d": 3 * 24 * 60 * 60 * 1000,
   "7d": 7 * 24 * 60 * 60 * 1000,
@@ -33,15 +32,25 @@ const ageMilliseconds: Record<Exclude<AgeFilter, "today">, number> = {
   "21d": 21 * 24 * 60 * 60 * 1000,
 };
 
-const ageCandidates: AgeFilter[] = ["today", "24h", "3d", "7d", "14d", "21d"];
+const ageCandidates: AgeFilter[] = ["24h", "3d", "7d", "14d", "21d"];
 
-const ageFilterLabels: Record<Exclude<AgeFilter, "today">, string> = {
+const ageFilterLabels: Record<AgeFilter, string> = {
   "24h": "24 hours",
   "3d": "3 days",
   "7d": "7 days",
   "14d": "14 days",
   "21d": "21 days",
 };
+
+/**
+ * The window the feed opens with. A signal is worth acting on while it is
+ * fresh, and one rolling day is the same window the scan rotation covers, so
+ * the default view is exactly "everything the last full cycle found". The
+ * previous default was the calendar day, which is nearly empty at 9am and full
+ * at 6pm and needed an auto-widening rule to stay readable — that rule is gone
+ * with the reason for it.
+ */
+const defaultAge: AgeFilter = "24h";
 
 /**
  * Emoji-labelled location filters, matched case-insensitively against the
@@ -174,24 +183,41 @@ function firstName(value: string) {
   return value.trim().split(/[\s,]+/u)[0] || "them";
 }
 
-function EmptyState({ view, audience }: { view: InboxView; audience: SignalAudience }) {
+/**
+ * The default window is a hard 24 hours, so an empty view is a real answer
+ * rather than a bug — but only if the way out is on screen. The widening
+ * offered here is the narrowest window that actually holds something, so the
+ * button never promises posts it cannot show.
+ */
+function EmptyState({
+  view,
+  age,
+  widening,
+  onWiden,
+}: {
+  view: InboxView;
+  age: AgeFilter;
+  widening: { age: AgeFilter; count: number } | null;
+  onWiden: (value: AgeFilter) => void;
+}) {
   const copy: Record<InboxView, [string, string]> = {
-    queue: ["Inbox cleared", "There are no unhandled high-confidence leads in this view."],
+    queue: ["Inbox cleared", `No unhandled leads were published in the last ${ageFilterLabels[age]}.`],
     contacted: ["No contacted leads yet", "After you send a message, mark the lead contacted and it will appear here."],
     hidden: ["No hidden leads", "Leads you intentionally hide can be restored from here."],
   };
-  const audienceSuffix = audience === "technical"
-    ? " Technical signals are highlighted when they arrive."
-    : audience === "non-technical"
-      ? " Business signals are highlighted when they arrive."
-      : "";
   return (
     <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-6 py-14 text-center">
       <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-xl bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400">
         <Icon name="check" className="h-6 w-6" />
       </span>
       <h2 className="mt-4 text-xl font-bold text-slate-950 dark:text-slate-50">{copy[view][0]}</h2>
-      <p className="mx-auto mt-2 max-w-xl text-base leading-7 text-slate-600 dark:text-slate-400">{copy[view][1]}{audienceSuffix}</p>
+      <p className="mx-auto mt-2 max-w-xl text-base leading-7 text-slate-600 dark:text-slate-400">{copy[view][1]}</p>
+      {widening ? (
+        <button className="btn btn-secondary mt-5 !min-h-10 !px-4 !text-sm" onClick={() => onWiden(widening.age)} type="button">
+          <Icon name="clock" className="h-4 w-4" />
+          Show the last {ageFilterLabels[widening.age]} ({widening.count})
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -241,11 +267,12 @@ export function HiringPostDashboard({
   updatedAt,
 }: Props) {
   const [view, setView] = useState<InboxView>("queue");
-  const [audience, setAudience] = useState<SignalAudience>("non-technical");
   const [company, setCompany] = useState("all");
   const [contactType, setContactType] = useState<ContactType | "all">("all");
-  const [age, setAge] = useState<AgeFilter>("today");
-  const [ageTouched, setAgeTouched] = useState(false);
+  // Role family no longer splits the feed, so it starts at "all" and is one
+  // filter among the rest.
+  const [roleFamily, setRoleFamily] = useState<RoleFamily | "all">("all");
+  const [age, setAge] = useState<AgeFilter>(defaultAge);
   const [region, setRegion] = useState<RegionFilter>("us");
   const [locations, setLocations] = useState<string[]>([]);
   const [query, setQuery] = useState("");
@@ -256,19 +283,18 @@ export function HiringPostDashboard({
     posts.filter((post) => post.company !== "Unknown").map((post) => post.company),
   )].sort((left, right) => left.localeCompare(right)), [posts]);
 
-  const counts = useMemo(() => {
-    const byAudience = (post: HiringPost) =>
-      audience === "all" || (audience === "technical") === (post.roleFamily === "Technical");
-    return {
-      queue: posts.filter((post) => byAudience(post) && post.matchStatus !== "excluded" && !decisions[post.id]).length,
-      contacted: posts.filter((post) => byAudience(post) && decisions[post.id] === "contacted").length,
-      hidden: posts.filter((post) => byAudience(post) && decisions[post.id] === "hidden").length,
-      direct: posts.filter((post) => post.matchStatus === "match" && post.contactType === "direct-team").length,
-      recruiters: posts.filter((post) => post.matchStatus === "match" && post.contactType === "recruiter").length,
-      excluded: posts.filter((post) => post.matchStatus === "excluded").length,
-      technical: posts.filter((post) => post.roleFamily === "Technical").length,
-    };
-  }, [audience, decisions, posts]);
+  const roleFamilies = useMemo(() => [...new Set(
+    posts.map((post) => post.roleFamily),
+  )].sort((left, right) => left.localeCompare(right)), [posts]);
+
+  const counts = useMemo(() => ({
+    queue: posts.filter((post) => post.matchStatus !== "excluded" && !decisions[post.id]).length,
+    contacted: posts.filter((post) => decisions[post.id] === "contacted").length,
+    hidden: posts.filter((post) => decisions[post.id] === "hidden").length,
+    direct: posts.filter((post) => post.matchStatus === "match" && post.contactType === "direct-team").length,
+    recruiters: posts.filter((post) => post.matchStatus === "match" && post.contactType === "recruiter").length,
+    excluded: posts.filter((post) => post.matchStatus === "excluded").length,
+  }), [decisions, posts]);
 
   // These three feed matchesFilters, which is memoized below so the filtered
   // list can depend on it by identity. Recomputing them every render would
@@ -278,25 +304,15 @@ export function HiringPostDashboard({
     () => locationFilters.filter((item) => locations.includes(item.value)),
     [locations],
   );
-  const todayStart = useMemo(() => {
-    const startOfToday = new Date(renderedAtTimestamp);
-    startOfToday.setHours(0, 0, 0, 0);
-    return startOfToday.getTime();
-  }, [renderedAtTimestamp]);
 
   const matchesFilters = useCallback(function matchesFilters(post: HiringPost, ageValue: AgeFilter) {
     const decision = decisions[post.id];
     const viewMatches = view === "queue"
       ? post.matchStatus !== "excluded" && !decision
       : decision === view;
-    const audienceMatches = audience === "all"
-      || (audience === "technical") === (post.roleFamily === "Technical");
     const regionMatches = region === "all" || post.location.status !== "outside-us";
-    const postedTimestamp = Date.parse(post.postedAt);
-    const elapsed = renderedAtTimestamp - postedTimestamp;
-    const ageMatches = ageValue === "today"
-      ? postedTimestamp >= todayStart && elapsed >= -5 * 60 * 1000
-      : elapsed >= -5 * 60 * 1000 && elapsed <= ageMilliseconds[ageValue];
+    const elapsed = renderedAtTimestamp - Date.parse(post.postedAt);
+    const ageMatches = elapsed >= -5 * 60 * 1000 && elapsed <= ageMilliseconds[ageValue];
     const locationMatches = selectedLocations.length === 0
       || selectedLocations.some((item) => item.pattern.test(post.location.label));
     const textMatches = !normalizedQuery || [
@@ -310,14 +326,14 @@ export function HiringPostDashboard({
     ].join(" ").toLowerCase().includes(normalizedQuery);
 
     return viewMatches
-      && audienceMatches
       && regionMatches
       && (company === "all" || post.company === company)
       && (contactType === "all" || post.contactType === contactType)
+      && (roleFamily === "all" || post.roleFamily === roleFamily)
       && ageMatches
       && locationMatches
       && textMatches;
-  }, [audience, company, contactType, decisions, normalizedQuery, region, renderedAtTimestamp, selectedLocations, todayStart, view]);
+  }, [company, contactType, decisions, normalizedQuery, region, renderedAtTimestamp, roleFamily, selectedLocations, view]);
 
   const ageCounts = useMemo(() => {
     const countsByAge = new Map<AgeFilter, number>();
@@ -331,36 +347,34 @@ export function HiringPostDashboard({
     return countsByAge;
   }, [matchesFilters, posts]);
 
-  // The "today" window is calendar-day based and can be near-empty at some
-  // hours. When the visitor hasn't touched the date filter and today yields
-  // almost nothing, widen automatically so the feed never renders dead.
-  const minimumFeedSize = 6;
-  const effectiveAge = !ageTouched && age === "today"
-    ? (ageCounts.get("today") ?? 0) >= minimumFeedSize
-      ? "today"
-      : ageCandidates.find((candidate) => (ageCounts.get(candidate) ?? 0) >= minimumFeedSize)
-        ?? ageCandidates.filter((candidate) => (ageCounts.get(candidate) ?? 0) > 0).at(-1)
-        ?? "today"
-    : age;
+  // The window used to widen itself whenever the calendar day looked thin,
+  // which meant the list on screen and the control above it disagreed about
+  // what was being shown. The window is now exactly what the control says, and
+  // the empty state offers the next window that holds something.
+  const widening = useMemo(() => {
+    const wider = ageCandidates
+      .slice(ageCandidates.indexOf(age) + 1)
+      .find((candidate) => (ageCounts.get(candidate) ?? 0) > 0);
+    return wider ? { age: wider, count: ageCounts.get(wider) ?? 0 } : null;
+  }, [age, ageCounts]);
 
-  // Every input matchesFilters closes over has to be listed: the array below
-  // once held only [posts, effectiveAge], so changing Company (or contact,
+  // Every input matchesFilters closes over has to be listed in its dependency
+  // array: it once held only [posts, age], so changing Company (or contact,
   // region, location, query) returned the memoized list unchanged and the
-  // filter looked dead. It only ever appeared to work when the change also
-  // moved effectiveAge through ageCounts.
+  // filter looked dead.
   // The stored feed is ordered for consolidation — match before review before
   // excluded, then by score — which buried a signal posted an hour ago under
   // one from five days ago. A radar is read newest-first, so the visible list
   // is sorted by recency here; score only breaks ties.
   const filtered = useMemo(() => {
     return posts
-      .filter((post) => matchesFilters(post, effectiveAge))
+      .filter((post) => matchesFilters(post, age))
       .sort((left, right) => {
         const byRecency = Date.parse(right.postedAt) - Date.parse(left.postedAt);
         if (byRecency !== 0 && !Number.isNaN(byRecency)) return byRecency;
         return right.score - left.score;
       });
-  }, [effectiveAge, matchesFilters, posts]);
+  }, [age, matchesFilters, posts]);
 
   // Metadata-only posts (see contentOmitted) fetch their full text on demand,
   // batched in a single request, so the initial HTML stays small.
@@ -386,18 +400,22 @@ export function HiringPostDashboard({
     };
   }, [filtered, fetchedContent]);
 
+  // Widening the window is the one filter change here that is not instant:
+  // posts outside the shipped window arrive as metadata and fetch their text
+  // from /api/hiring-posts/content. A card whose text is still in flight says
+  // so rather than rendering the link-only fallback as if that were the post.
   const visiblePosts = filtered.map((post) => {
     const extra = post.contentOmitted ? fetchedContent[post.id] : undefined;
-    return extra
-      ? { ...post, content: extra.content, reasons: extra.reasons, exclusionReasons: extra.exclusionReasons }
-      : post;
+    if (extra) {
+      return {
+        post: { ...post, content: extra.content, reasons: extra.reasons, exclusionReasons: extra.exclusionReasons },
+        awaitingContent: false,
+      };
+    }
+    return { post, awaitingContent: Boolean(post.contentOmitted) };
   });
 
-  const widenedNote = effectiveAge !== age
-    ? `Only ${ageCounts.get("today") ?? 0} ${(ageCounts.get("today") ?? 0) === 1 ? "post" : "posts"} published today — showing the last ${ageFilterLabels[effectiveAge as Exclude<AgeFilter, "today">]} instead.`
-    : null;
-
-  const filtersAreActive = audience !== "non-technical" || company !== "all" || contactType !== "all" || age !== "today" || region !== "us" || locations.length > 0 || query !== "";
+  const filtersAreActive = company !== "all" || contactType !== "all" || roleFamily !== "all" || age !== defaultAge || region !== "us" || locations.length > 0 || query !== "";
   const viewOptions: Array<{ key: InboxView; label: string; count: number; hint: string; icon: "radar" | "check" | "x" }> = [
     { key: "queue", label: "To contact", count: counts.queue, hint: `${counts.direct} hiring team · ${counts.recruiters} recruiters`, icon: "radar" },
     { key: "contacted", label: "Contacted", count: counts.contacted, hint: "Saved on this browser", icon: "check" },
@@ -421,11 +439,10 @@ export function HiringPostDashboard({
   }
 
   function clearFilters() {
-    setAudience("non-technical");
     setCompany("all");
     setContactType("all");
-    setAge("today");
-    setAgeTouched(false);
+    setRoleFamily("all");
+    setAge(defaultAge);
     setRegion("us");
     setLocations([]);
     setQuery("");
@@ -445,38 +462,6 @@ export function HiringPostDashboard({
           Live feed error: {error}
         </div>
       ) : null}
-
-      {/* Audience toggle */}
-      <section aria-label="Signal audience" className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex w-full flex-wrap gap-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 sm:w-auto" role="group">
-          {([
-            ["all", "All signals"],
-            ["technical", "Technical"],
-            ["non-technical", "Non-technical"],
-          ] as const).map(([value, label]) => (
-            <button
-              aria-pressed={audience === value}
-              className={`inline-flex min-h-10 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-bold transition-colors sm:flex-none sm:px-4 ${
-                audience === value
-                  ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
-              }`}
-              key={value}
-              onClick={() => setAudience(value)}
-              type="button"
-            >
-              <Icon name={value === "technical" ? "code" : value === "non-technical" ? "users" : "layers"} className="h-4 w-4" />
-              {label}
-              {value === "all" ? <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${audience === "all" ? "bg-white/15 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}>{posts.length}</span> : null}
-            </button>
-          ))}
-        </div>
-        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-          {counts.technical} technical signals in the feed
-          <span className="mx-1.5 text-slate-300">·</span>
-          Technical and business roles use separate search queries.
-        </p>
-      </section>
 
       <section aria-label="Outreach inbox views" className="grid overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 sm:grid-cols-2 lg:grid-cols-4">
         {viewOptions.map((option) => (
@@ -500,7 +485,7 @@ export function HiringPostDashboard({
       </section>
 
       <section aria-label="Filter outreach leads" className="card mt-5 p-4 sm:p-5">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.2fr)_repeat(4,minmax(140px,0.8fr))]">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.2fr)_repeat(5,minmax(130px,0.8fr))]">
           <label className="block">
             <span className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-300">Search leads</span>
             <span className="relative block">
@@ -531,6 +516,19 @@ export function HiringPostDashboard({
             </select>
           </label>
           <label className="block">
+            {/* Technical and non-technical used to be a tab above the feed, and
+                choosing between them was a guess: the classifier reads a title
+                that is often a headline, so a Vulnerability Management Engineer
+                and a Content Marketing Manager landed on the same side often
+                enough that neither list could be trusted alone. It is one
+                optional filter now, and the default view holds both. */}
+            <span className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-300">Role family</span>
+            <select className="input h-11 font-semibold" onChange={(event) => setRoleFamily(event.target.value as typeof roleFamily)} value={roleFamily}>
+              <option value="all">All roles</option>
+              {roleFamilies.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label className="block">
             <span className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-300">Region</span>
             <select className="input h-11 font-semibold" onChange={(event) => setRegion(event.target.value as RegionFilter)} value={region}>
               <option value="us">🇺🇸 U.S. only</option>
@@ -539,13 +537,10 @@ export function HiringPostDashboard({
           </label>
           <label className="block">
             <span className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-300">Published</span>
-            <select className="input h-11 font-semibold" onChange={(event) => { setAge(event.target.value as AgeFilter); setAgeTouched(true); }} value={age}>
-              <option value="today">Today</option>
-              <option value="24h">Last 24 hours</option>
-              <option value="3d">Last 3 days</option>
-              <option value="7d">Last 7 days</option>
-              <option value="14d">Last 14 days</option>
-              <option value="21d">Last 21 days</option>
+            <select className="input h-11 font-semibold" onChange={(event) => setAge(event.target.value as AgeFilter)} value={age}>
+              {ageCandidates.map((value) => (
+                <option key={value} value={value}>Last {ageFilterLabels[value]}</option>
+              ))}
             </select>
           </label>
         </div>
@@ -602,33 +597,25 @@ export function HiringPostDashboard({
         </div>
       </section>
 
-      {widenedNote ? (
-        <p className="mt-4 rounded-xl border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/15 px-4 py-3 text-xs font-semibold leading-5 text-sky-800 dark:text-sky-300">
-          {widenedNote}
-        </p>
-      ) : null}
-
       {filtered.length === 0 ? (
-        <div className="mt-5"><EmptyState view={view} audience={audience} /></div>
+        <div className="mt-5">
+          <EmptyState age={age} onWiden={setAge} view={view} widening={widening} />
+        </div>
       ) : (
         <section className="mt-5 space-y-4" aria-label={`${viewOptions.find((option) => option.key === view)?.label ?? "Outreach"} leads`}>
-          {visiblePosts.map((post) => {
-            const decision = decisions[post.id];
-            const quality = qualityBadge(post);
-            const isTechnical = post.roleFamily === "Technical";
-            return (
-              <SignalCard
-                decision={decision}
-                isTechnical={isTechnical}
-                key={post.id}
-                onContacted={() => markContacted(post)}
-                onHidden={() => markHidden(post)}
-                post={post}
-                quality={quality}
-                renderedAtTimestamp={renderedAtTimestamp}
-              />
-            );
-          })}
+          {visiblePosts.map(({ post, awaitingContent }) => (
+            <SignalCard
+              awaitingContent={awaitingContent}
+              decision={decisions[post.id]}
+              isTechnical={post.roleFamily === "Technical"}
+              key={post.id}
+              onContacted={() => markContacted(post)}
+              onHidden={() => markHidden(post)}
+              post={post}
+              quality={qualityBadge(post)}
+              renderedAtTimestamp={renderedAtTimestamp}
+            />
+          ))}
         </section>
       )}
 
@@ -641,6 +628,7 @@ export function HiringPostDashboard({
 
 function SignalCard({
   post,
+  awaitingContent,
   decision,
   isTechnical,
   quality,
@@ -649,6 +637,7 @@ function SignalCard({
   onHidden,
 }: {
   post: HiringPost;
+  awaitingContent: boolean;
   decision: LeadDecision | undefined;
   isTechnical: boolean;
   quality: { label: string; className: string; dot: string };
@@ -757,9 +746,16 @@ function SignalCard({
         </div>
 
         {/* Full post text — readable, no click required */}
-        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 border-l-4 border-l-sky-300 dark:border-l-sky-500/60 bg-white dark:bg-slate-800">
+        <div
+          aria-busy={awaitingContent}
+          className={`mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 border-l-4 border-l-sky-300 dark:border-l-sky-500/60 bg-white dark:bg-slate-800 transition-opacity duration-150 ${
+            awaitingContent ? "opacity-40" : "opacity-100"
+          }`}
+        >
           <p className="whitespace-pre-line break-words px-4 py-4 text-[15px] leading-7 text-slate-800 dark:text-slate-200 sm:px-5">
-            {post.content || "Link-only post. The role details were recovered from its LinkedIn job card."}
+            {awaitingContent
+              ? "Loading the full post text…"
+              : post.content || "Link-only post. The role details were recovered from its LinkedIn job card."}
           </p>
           {postLinks.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 px-4 py-3 sm:px-5">

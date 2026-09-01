@@ -5,6 +5,30 @@ import type { HiringPost, HiringPostFeed } from "./types";
 // pruned here at ingest, so a 21-day filter over a 7-day feed shows nothing.
 const retentionMs = 21 * 24 * 60 * 60 * 1000;
 
+/**
+ * The window the dashboard opens with, and the one the server uses to decide
+ * which posts ship with their full text. One rolling day, matching both the
+ * scan rotation's own cycle and the client's `defaultAge` — the two have to
+ * agree or the first screen renders placeholders where posts should be.
+ */
+export const defaultFeedWindowMs = 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a post belongs to the view a visitor lands on: recent, in scope,
+ * not archived. Role family is deliberately absent. It used to be here, and
+ * the landing view showed only non-technical posts, so half the feed existed
+ * only behind a tab most people never changed — while the classifier that
+ * decided which half was reading a title that is frequently a headline rather
+ * than a role. The split was a guess presented as a choice; the family is now
+ * a filter the reader applies when they want it.
+ */
+export function isInDefaultFeedView(post: HiringPost, now = new Date()) {
+  if (post.matchStatus === "excluded") return false;
+  if (post.location?.status === "outside-us") return false;
+  const elapsed = now.getTime() - Date.parse(post.postedAt);
+  return elapsed >= -5 * 60 * 1000 && elapsed <= defaultFeedWindowMs;
+}
+
 export function emptyHiringPostFeed(): HiringPostFeed {
   return {
     version: 1,

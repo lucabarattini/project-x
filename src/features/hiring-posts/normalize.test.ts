@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { emptyHiringPostFeed, mergeHiringPostFeed } from "./feed";
+import {
+  defaultFeedWindowMs,
+  emptyHiringPostFeed,
+  isInDefaultFeedView,
+  mergeHiringPostFeed,
+} from "./feed";
 import { normalizeHiringPost } from "./normalize";
 import type { ApifyLinkedinPost } from "./types";
 
@@ -383,4 +388,32 @@ test("archives an automated daily digest instead of letting it fill the feed", (
   // The role family is still classified — it drives display and other
   // filters — so the exclusion is about the post's shape, not its subject.
   assert.notEqual(post.roleFamily, undefined);
+});
+
+test("the default view is one rolling day and does not take sides on role family", () => {
+  // Technical and non-technical were separate landing views, chosen by a
+  // classifier that reads a title which is often a headline. Both belong to
+  // the same list now; only recency, scope and archival decide.
+  const technical = normalizeHiringPost(rawPost({
+    content: "My team is hiring a Senior Software Engineer in Seattle, WA.",
+    article: { title: "Senior Software Engineer", link: "https://www.amazon.jobs/en/jobs/9/swe" },
+  }), now);
+  const business = normalizeHiringPost(rawPost(), now);
+  assert.ok(technical);
+  assert.ok(business);
+  assert.equal(technical.roleFamily, "Technical");
+  assert.notEqual(business.roleFamily, "Technical");
+  assert.ok(isInDefaultFeedView(technical, now));
+  assert.ok(isInDefaultFeedView(business, now));
+
+  assert.equal(defaultFeedWindowMs, 24 * 60 * 60 * 1000);
+  const stale = { ...business, postedAt: new Date(now.getTime() - 30 * 60 * 60 * 1000).toISOString() };
+  assert.equal(isInDefaultFeedView(stale, now), false, "30 hours is outside the window");
+  const justInside = { ...business, postedAt: new Date(now.getTime() - 23 * 60 * 60 * 1000).toISOString() };
+  assert.ok(isInDefaultFeedView(justInside, now));
+  assert.equal(isInDefaultFeedView({ ...business, matchStatus: "excluded" }, now), false);
+  assert.equal(
+    isInDefaultFeedView({ ...business, location: { ...business.location, status: "outside-us" } }, now),
+    false,
+  );
 });

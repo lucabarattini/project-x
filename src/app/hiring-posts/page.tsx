@@ -81,8 +81,14 @@ export default async function HiringPostsPage() {
   }
 
   const data = await getHiringPostPageData();
-  const technicalCount = data.feed.posts.filter((post) => post.roleFamily === "Technical").length;
-  const nonTechnicalCount = data.feed.posts.length - technicalCount;
+  // The header used to count technical against non-technical, which is the
+  // split the feed no longer makes. What the reader needs to know instead is
+  // how much of the feed the default window actually holds.
+  const renderedAt = new Date().toISOString();
+  const dayAgo = Date.parse(renderedAt) - 24 * 60 * 60 * 1000;
+  const recentCount = data.feed.posts.filter((post) => (
+    post.matchStatus !== "excluded" && Date.parse(post.postedAt) >= dayAgo
+  )).length;
 
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-950 dark:text-slate-50">
@@ -95,16 +101,16 @@ export default async function HiringPostsPage() {
             <h1 className="mt-2 text-3xl font-bold tracking-[-0.04em] text-slate-950 dark:text-slate-50 sm:text-4xl">
               Posts from hiring teams, recruiters and employees.
             </h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
+              Technical and business roles in one list, opening on the last 24 hours.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2 text-xs font-bold text-slate-600 dark:text-slate-400">
             <span className="card inline-flex items-center gap-2 px-3 py-2">
               <Icon name="layers" className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" /> {data.feed.posts.length} signals
             </span>
             <span className="card inline-flex items-center gap-2 px-3 py-2">
-              <Icon name="code" className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" /> {technicalCount} technical
-            </span>
-            <span className="card inline-flex items-center gap-2 px-3 py-2">
-              <Icon name="users" className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> {nonTechnicalCount} non-tech
+              <Icon name="clock" className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> {recentCount} in the last 24h
             </span>
             <span className="card inline-flex items-center gap-2 px-3 py-2">
               <Icon name="refresh" className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> {hiringPostScanCadenceHours}h batch
@@ -116,7 +122,7 @@ export default async function HiringPostsPage() {
           configured={data.configured}
           error={data.error}
           posts={data.feed.posts}
-          renderedAt={new Date().toISOString()}
+          renderedAt={renderedAt}
           scanCadenceHours={hiringPostScanCadenceHours}
           companyCycleHours={hiringPostCompanyCycleHours}
           source={data.source}
