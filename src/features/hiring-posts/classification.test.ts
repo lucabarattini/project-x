@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyRoleFamily, inferLocation, isNonHiringNoise } from "./classification";
+import {
+  advertisesAnotherCompany,
+  classifyRoleFamily,
+  inferLocation,
+  isNonHiringNoise,
+} from "./classification";
 
 test("classifyRoleFamily finds the technical role in the post body when the title is a headline", () => {
   const family = classifyRoleFamily(
@@ -41,6 +46,58 @@ test("inferLocation flags U.S. and outside-U.S. signals", () => {
 test("isNonHiringNoise catches job-search posts, not hiring posts", () => {
   assert.equal(isNonHiringNoise("I'm looking for my next role, please connect."), true);
   assert.equal(isNonHiringNoise("We're hiring engineers! Apply here."), false);
+});
+
+test("isNonHiringNoise catches an account that republishes other companies' boards", () => {
+  // Nine posts in one run came from a single account with this footer.
+  assert.equal(
+    isNonHiringNoise(
+      "Stripe just posted 2 new roles 🚀 Product Manager, Identity & Access Management. "
+        + "➕ Follow me — every new opening at 17 top tech companies, with the pay range, every day.",
+    ),
+    true,
+  );
+  assert.equal(
+    isNonHiringNoise("My team is hiring a Principal TPM. Apply here, or DM me."),
+    false,
+  );
+});
+
+test("a role advertised at another company is not a lead at the author's", () => {
+  // A Microsoft engineer reposting Stripe's board became a Microsoft lead:
+  // the card claimed a verified Microsoft signal over a role nobody there owns.
+  assert.equal(
+    advertisesAnotherCompany("Microsoft", "Stripe just posted 2 new roles 🚀 Product Manager, Identity"),
+    true,
+  );
+  assert.equal(
+    advertisesAnotherCompany("Microsoft", "Google & Stripe dropped Data & Product Management roles"),
+    true,
+  );
+
+  // The rule reads the company catalog, so a company the feed does not track
+  // is invisible to it. Those posts are caught by the account's own footer in
+  // isNonHiringNoise instead, which is why both rules exist.
+  assert.equal(
+    advertisesAnotherCompany("Microsoft", "🚀 NVIDIA is Hiring! Senior Technical Program Manager"),
+    false,
+  );
+
+  // The ordinary case: an employee saying their own employer is hiring.
+  assert.equal(
+    advertisesAnotherCompany("Amazon", "🚨 Amazon is HIRING a Principal Product Manager, Merch on Demand"),
+    false,
+  );
+  assert.equal(
+    advertisesAnotherCompany("Meta", "I'm hiring for my TPM team on Meta Business AI — send them my way."),
+    false,
+  );
+
+  // Naming a former employer is not advertising its board.
+  assert.equal(
+    advertisesAnotherCompany("Amazon", "Ex-Microsoft, now at Amazon. My team is hiring a Sr. PM."),
+    false,
+  );
 });
 
 test("a post that names only a non-US office city is not U.S.", () => {

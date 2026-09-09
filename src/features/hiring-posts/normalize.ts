@@ -1,4 +1,5 @@
 import {
+  advertisesAnotherCompany,
   classifyContactType,
   classifyRoleFamily,
   hasHiringIntent,
@@ -121,6 +122,13 @@ export function normalizeHiringPost(
 
   if (nonHiringNoise || (!hiringIntent && !opportunityUrl)) {
     exclusionReasons.push("The post is not advertising a concrete open role");
+  }
+  // Checked against the attributed company, not inside the text, so an employee
+  // posting about their own employer is untouched — and a shared role whose
+  // link named its company is already attributed to that company by
+  // inferCompany, so it is never the "other" one here.
+  if (company !== "Unknown" && advertisesAnotherCompany(company, searchableText)) {
+    exclusionReasons.push("The role advertised is at another company");
   }
   if (roleFamily === "Other") reasons.push("Role family needs verification");
   else reasons.push(`${roleFamily} role`);

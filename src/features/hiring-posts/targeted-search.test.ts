@@ -7,8 +7,10 @@ import {
   isTargetedSearchWindow,
   targetedSearchQueryFamilies,
   outreachSearchQueries,
+  productSearchQueries,
   targetedSearchMaxPostsCeiling,
   targetedSearchResultCeiling,
+  targetedSearchTitleMatcher,
   untrackedCompanies,
 } from "./targeted-search";
 import { buildLinkedinPostSearchInput } from "./search-config";
@@ -56,8 +58,36 @@ test("the result ceiling multiplies per query, matching how maxPosts is applied"
 test("names a query family so a run can be aimed at a discipline", () => {
   assert.ok(isTargetedSearchQueryFamily("finance"));
   assert.ok(isTargetedSearchQueryFamily("outreach"));
+  assert.ok(isTargetedSearchQueryFamily("product"));
   assert.equal(isTargetedSearchQueryFamily("accounting"), false);
   assert.equal(targetedSearchQueryFamilies.finance, financeSearchQueries);
+  assert.equal(targetedSearchQueryFamilies.product, productSearchQueries);
+});
+
+test("every product phrase carries hiring intent and the discipline together", () => {
+  const intent = /hiring|opening|join|team is/iu;
+  const discipline = /product|program|TPM|PM-T/iu;
+  for (const query of productSearchQueries) {
+    for (const phrase of query.split(" OR ")) {
+      assert.ok(intent.test(phrase), `no hiring intent in ${phrase}`);
+      assert.ok(discipline.test(phrase), `no product discipline in ${phrase}`);
+    }
+  }
+});
+
+test("the report highlights the discipline the family was aimed at", () => {
+  const post = "We're hiring a Senior Technical Program Manager and a staff accountant.";
+
+  const product = post.match(targetedSearchTitleMatcher("product"))?.map((t) => t.toLowerCase());
+  assert.deepEqual(product, ["senior technical program manager"]);
+
+  const finance = post.match(targetedSearchTitleMatcher("finance"))?.map((t) => t.toLowerCase());
+  assert.deepEqual(finance, ["staff accountant"]);
+
+  // Outreach is aimed at a phrasing, so it reports whatever discipline shows up
+  // — including from a custom --query= that belongs to no family at all.
+  assert.equal(post.match(targetedSearchTitleMatcher("outreach"))?.length, 2);
+  assert.equal(post.match(targetedSearchTitleMatcher(null))?.length, 2);
 });
 
 test("every finance phrase carries hiring intent and the discipline together", () => {

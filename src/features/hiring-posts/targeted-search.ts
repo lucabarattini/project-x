@@ -38,12 +38,29 @@ export const financeSearchQueries = [
 ] as const;
 
 /**
+ * Product, program and technical-program openings.
+ *
+ * Same shape as the finance family, for the same reason: a quoted role title
+ * next to the hiring keyword. The three queries are split by title rather than
+ * by seniority because maxPosts is applied per query — "senior program
+ * manager" alongside "program manager" would spend a second query's budget
+ * re-finding posts the shorter phrase already matches, since LinkedIn matches
+ * the phrase inside the longer title.
+ */
+export const productSearchQueries = [
+  "hiring \"product manager\" OR hiring \"senior product manager\" OR hiring \"principal product manager\" OR hiring \"group product manager\" OR hiring \"product management\"",
+  "hiring \"technical program manager\" OR hiring \"technical product manager\" OR hiring \"TPM\" OR hiring \"program manager\" OR hiring \"PM-T\"",
+  "hiring \"product owner\" OR hiring \"head of product\" OR hiring \"director of product\" OR hiring \"product lead\" OR hiring \"principal program manager\"",
+] as const;
+
+/**
  * The families a run can aim with, by name. Adding one here is what makes it
  * reachable from the script's --queries flag.
  */
 export const targetedSearchQueryFamilies = {
   outreach: outreachSearchQueries,
   finance: financeSearchQueries,
+  product: productSearchQueries,
 } as const;
 
 export type TargetedSearchQueryFamily = keyof typeof targetedSearchQueryFamilies;
@@ -52,6 +69,42 @@ export function isTargetedSearchQueryFamily(
   value: string,
 ): value is TargetedSearchQueryFamily {
   return Object.hasOwn(targetedSearchQueryFamilies, value);
+}
+
+/**
+ * The role titles a family is trying to surface, so a report can lead with the
+ * discipline it found instead of the first lines of the post. They live next
+ * to the queries deliberately: a family whose queries ask for one discipline
+ * and whose report highlights another reads as "no matches" when the run
+ * actually worked.
+ *
+ * Longest titles first — alternation returns the first branch that matches, so
+ * "product manager" placed ahead of "technical program manager" would label
+ * every TPM post as a PM one.
+ */
+const financeTitlePattern = "\\b(?:senior financial analyst|financial analyst|staff accountant|senior accountant|accounting manager|accountant|internal audit(?:or)?|audit manager|auditor|financial reporting|technical accounting|finance manager|financial controller|controller|FP&A|accounts payable|accounts receivable|revenue accounting|tax manager|assurance)\\b";
+
+const productTitlePattern = "\\b(?:senior technical program manager|technical program manager|technical product manager|principal product manager|senior product manager|group product manager|principal program manager|senior program manager|product marketing manager|director of product|head of product|product manager|program manager|product management|product owner|product lead|TPMs?|PM-Ts?)\\b";
+
+/**
+ * Outreach is aimed at a phrasing rather than a discipline, so it highlights
+ * whatever any discipline family looks for.
+ */
+const anyTitlePattern = `${financeTitlePattern}|${productTitlePattern}`;
+
+const titlePatternsByFamily: Record<TargetedSearchQueryFamily, string> = {
+  outreach: anyTitlePattern,
+  finance: financeTitlePattern,
+  product: productTitlePattern,
+};
+
+/**
+ * Built fresh per call rather than shared: a /g/ regex carries lastIndex
+ * between calls, so one instance reused across posts silently skips matches
+ * on every other post.
+ */
+export function targetedSearchTitleMatcher(family: TargetedSearchQueryFamily | null) {
+  return new RegExp(family ? titlePatternsByFamily[family] : anyTitlePattern, "giu");
 }
 
 /**

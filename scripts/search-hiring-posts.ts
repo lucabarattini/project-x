@@ -12,9 +12,13 @@ import {
   isTargetedSearchQueryFamily,
   targetedSearchQueryFamilies,
   targetedSearchResultCeiling,
+  targetedSearchTitleMatcher,
   untrackedCompanies,
 } from "../src/features/hiring-posts/targeted-search";
-import type { TargetedSearchWindow } from "../src/features/hiring-posts/targeted-search";
+import type {
+  TargetedSearchQueryFamily,
+  TargetedSearchWindow,
+} from "../src/features/hiring-posts/targeted-search";
 import type { ApifyLinkedinPost } from "../src/features/hiring-posts/types";
 
 /** Apify's pay-per-result price for this Actor, for the pre-flight estimate. */
@@ -49,9 +53,10 @@ function main() {
       `Unknown query family "${familyName}". Known: ${Object.keys(targetedSearchQueryFamilies).join(", ")}`,
     );
   }
-  const queries = rawQueries.length > 0
-    ? rawQueries
-    : targetedSearchQueryFamilies[familyName as keyof typeof targetedSearchQueryFamilies];
+  // A custom --query= belongs to no family, so its report highlights every
+  // discipline rather than pretending to know which one was asked for.
+  const family = rawQueries.length > 0 ? null : familyName as TargetedSearchQueryFamily;
+  const queries = rawQueries.length > 0 ? rawQueries : targetedSearchQueryFamilies[family!];
 
   const input = buildTargetedPostSearchInput({ companies, queries, postedLimit, maxPosts });
   const ceiling = targetedSearchResultCeiling(input.searchQueries.length, input.maxPosts);
@@ -72,13 +77,13 @@ function main() {
     console.log("\nDry run. Re-run with --commit to spend the above and ingest the results.");
     return;
   }
-  return report ? runReport(input) : run(input);
+  return report ? runReport(input, family) : run(input, family);
 }
 
-/** Reads the discipline out of a post so the report can lead with it. */
-const financeTitles = /\b(?:financial analyst|staff accountant|senior accountant|accounting manager|accountant|internal audit(?:or)?|audit manager|auditor|financial reporting|technical accounting|finance manager|financial controller|controller|FP&A|accounts payable|accounts receivable|revenue accounting|tax manager|assurance)\b/giu;
-
-async function runReport(input: ReturnType<typeof buildTargetedPostSearchInput>) {
+async function runReport(
+  input: ReturnType<typeof buildTargetedPostSearchInput>,
+  family: TargetedSearchQueryFamily | null,
+) {
   console.log("\nRunning the Actor (report only — nothing is written to the feed)…");
   const rawPosts = await runPostSearchActor(input) as ApifyLinkedinPost[];
   console.log(`Actor returned ${rawPosts.length} posts ≈ $${(rawPosts.length * usdPerResult).toFixed(2)}\n`);
@@ -93,10 +98,11 @@ async function runReport(input: ReturnType<typeof buildTargetedPostSearchInput>)
     })
     .map((post) => {
       const text = (post.content ?? "").replace(/\s+/gu, " ").trim();
-      const titles = [...new Set((text.match(financeTitles) ?? []).map((t) => t.toLowerCase()))];
+      const matcher = targetedSearchTitleMatcher(family);
+      const titles = [...new Set((text.match(matcher) ?? []).map((title) => title.toLowerCase()))];
       return { post, text, titles };
     })
-    // A post naming an accounting title is the whole point; the rest is context.
+    // A post naming a role title is the whole point; the rest is context.
     .sort((left, right) => right.titles.length - left.titles.length);
 
   for (const { post, text, titles } of rows) {
@@ -107,10 +113,13 @@ async function runReport(input: ReturnType<typeof buildTargetedPostSearchInput>)
     console.log(`  ${text.slice(0, 500)}`);
   }
   console.log("=".repeat(78));
-  console.log(`${rows.length} unique posts · ${rows.filter((row) => row.titles.length > 0).length} name an accounting, audit or analyst title.`);
+  console.log(`${rows.length} unique posts · ${rows.filter((row) => row.titles.length > 0).length} name a role title this search was aimed at.`);
 }
 
-async function run(input: ReturnType<typeof buildTargetedPostSearchInput>) {
+async function run(
+  input: ReturnType<typeof buildTargetedPostSearchInput>,
+  family: TargetedSearchQueryFamily | null,
+) {
   console.log("\nRunning the Actor (the scheduled task is untouched)…");
   const rawPosts = await runPostSearchActor(input) as ApifyLinkedinPost[];
   console.log(`Actor returned ${rawPosts.length} posts ≈ $${(rawPosts.length * usdPerResult).toFixed(2)}`);
@@ -131,11 +140,22 @@ async function run(input: ReturnType<typeof buildTargetedPostSearchInput>) {
   await writeHiringPostFeed(next);
   console.log(`Feed ${stored.posts.length} → ${next.posts.length} posts.`);
 
+  // An ingesting run is still a run someone is reading: a name and a URL alone
+  // send you to LinkedIn to find out whether the post was worth opening, which
+  // is the whole job the report already does.
   const fresh = next.posts.filter((post) => !stored.posts.some((old) => old.id === post.id));
   console.log(`\n${fresh.length} new:`);
   for (const post of fresh) {
-    console.log(`  [${post.company}/${post.roleFamily}/${post.matchStatus}] ${post.author.name}`);
-    console.log(`    ${post.linkedinUrl}`);
+    const text = post.content.replace(/\s+/gu, " ").trim();
+    const titles = [...new Set(
+      (text.match(targetedSearchTitleMatcher(family)) ?? []).map((title) => title.toLowerCase()),
+    )];
+    console.log("=".repeat(78));
+    console.log(`${post.author.name}${titles.length > 0 ? `  →  ${titles.join(", ")}` : ""}`);
+    console.log(`  ${post.author.headline || "—"}`);
+    console.log(`  [${post.company}/${post.roleFamily}/${post.matchStatus}] ${post.location.label}`);
+    console.log(`  ${post.postedAt.slice(0, 10)} · ${post.linkedinUrl}`);
+    console.log(`  ${text.slice(0, 500)}`);
   }
 }
 

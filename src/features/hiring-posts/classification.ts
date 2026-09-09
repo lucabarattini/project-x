@@ -7,6 +7,7 @@ import type {
 import {
   companyFromHiringUrl,
   companyMentionInText,
+  hiringPostCompanies,
   withoutFormerCompanyMentions,
 } from "./targets";
 
@@ -339,7 +340,45 @@ export function classifyRoleFamily(title: string, content: string): RoleFamily {
 }
 
 export function isNonHiringNoise(text: string) {
-  return /\b(?:looking for my next (?:role|opportunity)|actively looking for|on behalf of my (?:wife|husband|partner)|call for proposals|\bCFP\b|submit your proposal|requests? for referrals?|commenting for visibility|hiring pattern|hire AI instead|why did you get laid off|book recommendation|graduated as an? Amazon|internship comes to an end)\b/iu.test(text);
+  return /\b(?:looking for my next (?:role|opportunity)|actively looking for|on behalf of my (?:wife|husband|partner)|call for proposals|\bCFP\b|submit your proposal|requests? for referrals?|commenting for visibility|hiring pattern|hire AI instead|why did you get laid off|book recommendation|graduated as an? Amazon|internship comes to an end)\b/iu.test(text)
+    || jobBoardAccountPattern.test(text);
+}
+
+/**
+ * Accounts that republish other companies' boards as a daily feed. They say so
+ * themselves — the pitch to follow them is the tell, and it is the same line on
+ * every post — so it costs nothing to read and does not depend on which
+ * companies a given post happens to list.
+ */
+const jobBoardAccountPattern = /every new opening at \d+ top tech companies|repost to help a job seeker|follow me for more (?:product |tech )?roles|for more job drops/iu;
+
+/**
+ * Whether a post advertises a company other than the one it is attributed to.
+ *
+ * The feed reads the company off the author's headline, so a Microsoft engineer
+ * reposting Stripe's board becomes a Microsoft lead: the card says "Microsoft
+ * signal verified" over a role no one at Microsoft owns, and DMing the author
+ * reaches someone with no more access to it than the reader has. One such
+ * account contributed nine posts to a single run.
+ *
+ * The author's own company is never a match, because an employee writing
+ * "Amazon is hiring" about their own employer is the ordinary, useful case.
+ *
+ * Only tracked companies are visible to this rule — a repost of an untracked
+ * board reads as ordinary text. Those posts are caught by the account's own
+ * "follow me for every opening" footer in isNonHiringNoise instead.
+ */
+export function advertisesAnotherCompany(company: TargetCompany, text: string) {
+  return hiringPostCompanies.some((candidate) => {
+    // Short names ("X") match too much ordinary prose to be read as a claim
+    // about who is hiring.
+    if (candidate === company || candidate.length < 4) return false;
+    const name = candidate.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    return new RegExp(
+      `\\b${name}\\b[^.!?\\n]{0,40}\\b(?:is hiring|are hiring|just posted|just dropped|dropped|opened)\\b`,
+      "iu",
+    ).test(text);
+  });
 }
 
 export function hasHiringIntent(text: string) {
