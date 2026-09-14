@@ -67,6 +67,35 @@ export function formatAppleLocation(locations: AppleLocation[] | undefined) {
 }
 
 /**
+ * Apple Store floor staff. Apple's careers board prefixes every US retail
+ * posting with "US-" or "US - " — "US-Genius", "US - Specialist: Seasonal,
+ * Part-time", "US-Store Leader" — and republishes the same handful of titles
+ * per market, constantly. Sorted newest-first, which is how this provider
+ * reads the board, they were about 6% of Apple's page-one postings.
+ *
+ * They used to be classified into a track no portal lists, which kept them
+ * out of the default views but still in the snapshot, the JSON feed, the CSV
+ * and the track picker. They are now dropped here, at parse time, so a
+ * shop-floor posting never becomes a job at all.
+ *
+ * The prefix alone is not the test, and neither is the word after it.
+ * "Specialist" by itself is a real Apple engineering title — "Specialist,
+ * Emergency Services - Sensing & Connectivity" was posted eight times in the
+ * same sample — so the store vocabulary has to sit behind the prefix. And the
+ * vocabulary has to be the whole title: a store posting is "US-Lead", while
+ * "US - Lead Software Engineer" would be an engineering one, which is why the
+ * match ends at the title's end or its first separator. Every name in the
+ * list was read off the board; a variant that is missed costs one visible
+ * posting, while a wrong match hides a real role.
+ */
+const appleRetailStoreTitle =
+  /^\s*US\s*[-–—]\s*(?:(?:senior|sr\.?)\s+)?(?:technical\s+(?:specialist|expert)|operations\s+(?:expert|specialist|lead(?:er)?)|business\s+(?:pro|expert)|creative\s+pro|(?:store|market)\s+lead(?:er)?|specialist|expert|genius|creative|manager|lead(?:er)?)\s*(?=$|[:,(])/iu;
+
+export function isAppleRetailStoreTitle(title: string) {
+  return appleRetailStoreTitle.test(title);
+}
+
+/**
  * Apple's search page is server-rendered: the React Router loader data is
  * inlined as `window.__staticRouterHydrationData = JSON.parse("<json>")`, so
  * one HTML GET yields a full page of postings with no token exchange. The
@@ -103,6 +132,7 @@ export function parseAppleHydrationData(html: string): ParsedAppleJob[] {
       typeof result.postingTitle === "string" ? result.postingTitle.trim() : "";
     const id = result.positionId ?? result.reqId ?? "";
     if (!title || !id) continue;
+    if (isAppleRetailStoreTitle(title)) continue;
 
     const slug =
       typeof result.transformedPostingTitle === "string"

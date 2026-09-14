@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   formatAppleLocation,
+  isAppleRetailStoreTitle,
   parseAppleHydrationData,
   parseAppleTotalRecords,
 } from "./apple";
@@ -24,7 +25,7 @@ const page = pageWith([
   },
   {
     positionId: 114438158,
-    postingTitle: "US - Specialist: Seasonal, Part-time",
+    postingTitle: "Specialist, Emergency Services - Sensing & Connectivity",
     locations: [{ name: "United States", city: "", countryName: "United States of America" }],
     postingDate: "Aug 23, 2026",
   },
@@ -84,4 +85,53 @@ test("parseAppleTotalRecords reports how many pages the fan-out should schedule"
     parseAppleTotalRecords('<script>window.__staticRouterHydrationData = JSON.parse("{broken");</script>'),
     0,
   );
+});
+
+test("parseAppleHydrationData drops Apple Store retail postings before they become jobs", () => {
+  // Apple republishes the same shop-floor titles per market under a "US-"
+  // prefix. They used to be parked in a track no portal lists; now they never
+  // enter the snapshot, so they reach neither the board, the JSON feed nor the
+  // CSV. Every name here was read off the live board.
+  const retailTitles = [
+    "US - Specialist: Seasonal, Part-time",
+    "US-Specialist (Part Time)",
+    "US-Genius",
+    "US-Expert",
+    "US-Technical Expert",
+    "US-Technical Specialist",
+    "US-Creative Pro",
+    "US-Business Pro",
+    "US-Business Expert",
+    "US-Operations Expert",
+    "US-Operations Specialist",
+    "US-Operations Lead",
+    "US-Store Leader",
+    "US-Manager",
+    "US-Senior Manager",
+    "US-Lead",
+  ];
+  for (const title of retailTitles) {
+    assert.equal(isAppleRetailStoreTitle(title), true, `expected "${title}" to be a retail posting`);
+  }
+
+  const jobs = parseAppleHydrationData(pageWith([
+    ...retailTitles.map((postingTitle, index) => ({ positionId: 100 + index, postingTitle })),
+    { positionId: 1, postingTitle: "Software Development Engineer, Compute Platform" },
+  ]));
+  assert.deepEqual(jobs.map((job) => job.title), ["Software Development Engineer, Compute Platform"]);
+});
+
+test("the Apple retail rule reads the prefix and the whole title, not one word", () => {
+  // "Specialist" is a real Apple engineering title, and the prefix on its own
+  // says nothing: the store posting is "US-Lead", while a "US - Lead Software
+  // Engineer" would be an engineering role. A false drop hides a real job,
+  // which is the worse failure of the two.
+  for (const title of [
+    "Specialist, Emergency Services - Sensing & Connectivity",
+    "US - Lead Software Engineer",
+    "US - Senior Software Engineer",
+    "US-Data Scientist",
+  ]) {
+    assert.equal(isAppleRetailStoreTitle(title), false, `expected "${title}" to survive`);
+  }
 });
