@@ -7,6 +7,4 @@ Company logos and trademarks are owned by their respective companies. They are i
 Provider data comes from publicly accessible company career pages and job board endpoints. Endpoint availability, publish dates, modified dates, and descriptions are provider-controlled.
 
 This project is not affiliated with, endorsed by, or sponsored by LinkedIn Corporation.
-LinkedIn is a trademark of LinkedIn Corporation. Content retrieved from LinkedIn is
-subject to LinkedIn's terms of service and remains the property of its authors; this
-project does not redistribute it publicly.
+LinkedIn is a trademark of LinkedIn Corporation.

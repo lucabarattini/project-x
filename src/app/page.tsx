@@ -58,9 +58,6 @@ function SiteHeader({ portal }: { portal: "tech" | "non-tech" }) {
               Non-tech
             </Link>
           </div>
-          <Link className="btn btn-ghost !min-h-10 !px-3 !text-sm" href="/hiring-posts">
-            Hiring signals
-          </Link>
           <a className="btn btn-ghost hidden !min-h-10 !px-3 !text-sm md:inline-flex" href="/api/jobs">
             JSON feed
           </a>
@@ -257,7 +254,6 @@ function SiteFooter() {
           Data is fetched directly from official ATS career pages.
         </p>
         <div className="flex flex-wrap gap-4">
-          <a className="font-semibold text-slate-700 dark:text-slate-300 hover:text-sky-800 dark:hover:text-sky-300" href="/hiring-posts">Hiring signals</a>
           <a className="font-semibold text-slate-700 dark:text-slate-300 hover:text-sky-800 dark:hover:text-sky-300" href="/api/jobs">JSON feed</a>
           <a className="font-semibold text-slate-700 dark:text-slate-300 hover:text-sky-800 dark:hover:text-sky-300" href="/job-boards.csv">Board CSV</a>
         </div>
