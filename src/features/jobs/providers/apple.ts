@@ -205,16 +205,26 @@ export async function fetchLatestAppleJobs(options: { maxJobs?: number } = {}) {
         signal: AbortSignal.timeout(12_000),
         headers: browserHeaders,
       });
-      return response.ok ? await response.text() : "";
+      return response.ok ? await response.text() : null;
     } catch {
-      return "";
+      return null;
     }
   }
 
+  // Page one decides whether this run is trustworthy at all. Both failures
+  // below used to `return []`, which runProvider reports as "no openings" —
+  // the board rendered as a quiet day on the dashboard while Apple was in
+  // fact refusing us, and the empty result was cached for a full TTL.
+  // Neither case is a quiet day: this board carries ~4.5k US openings, so
+  // zero of them means we were blocked or the page shape moved under us.
   const firstPage = await readPage(pageUrl(1));
+  if (firstPage === null) {
+    throw new Error("Apple search page one could not be read");
+  }
+
   const parsed = parseAppleHydrationData(firstPage);
   if (parsed.length === 0) {
-    return [];
+    throw new Error("Apple search page one carried no postings");
   }
 
   const total = Math.min(parseAppleTotalRecords(firstPage) || parsed.length, maxJobs);
@@ -228,7 +238,7 @@ export async function fetchLatestAppleJobs(options: { maxJobs?: number } = {}) {
     pageConcurrency,
     startedAt,
     runDeadlineMs,
-    async (page) => parseAppleHydrationData(await readPage(pageUrl(page))),
+    async (page) => parseAppleHydrationData(await readPage(pageUrl(page)) ?? ""),
   );
 
   return [...parsed, ...rest.flat()]

@@ -169,10 +169,24 @@ export async function fetchLatestMicrosoftJobs(options: { maxJobs?: number } = {
     }
   }
 
+  // Page one decides whether this run is trustworthy at all. Both failures
+  // below used to `return []`, which runProvider reports as "no openings" —
+  // so the throttle this provider already detects (the 429/403 cooldown
+  // above) reached the dashboard as a quiet day rather than an outage, and
+  // the empty board was cached for a full TTL. This board carries ~1.1k US
+  // openings; zero of them is never the real answer.
   const firstPage = await readPage(0);
+  if (firstPage === null) {
+    throw new Error(
+      rateLimited
+        ? "Microsoft PCSX search is rate limited"
+        : "Microsoft PCSX search page one could not be read",
+    );
+  }
+
   const parsed = parsePcsxPositions(firstPage, board.boardUrl);
   if (parsed.length === 0) {
-    return [];
+    throw new Error("Microsoft PCSX search page one carried no positions");
   }
 
   const total = Math.min(parsePcsxCount(firstPage) || parsed.length, maxJobs);
