@@ -1,4 +1,5 @@
 import boards from "../../../../data/expedia-boards.json";
+import { detailConcurrency, mapWithinDeadline } from "./concurrency";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
 type ExpediaBoard = GreenhouseBoard & {
@@ -26,26 +27,6 @@ function stripHtml(html = "") {
     .replace(/&#39;/giu, "'")
     .replace(/\s+/gu, " ")
     .trim();
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  mapper: (item: T) => Promise<R>,
-) {
-  const results: R[] = [];
-  let index = 0;
-
-  async function worker() {
-    while (index < items.length) {
-      const current = items[index];
-      index += 1;
-      results.push(await mapper(current));
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
 }
 
 /**
@@ -136,6 +117,11 @@ export async function fetchLatestExpediaJobs(options: { maxJobs?: number } = {})
   // them rather than the earlier 120 cap that left roles out of the portal.
   const { maxJobs = 200 } = options;
   const board = expediaBoards[0];
+  // Wall-clock budget for the whole run, inside the caller's provider timeout.
+  // Entries are sorted newest-first below, so whatever the deadline cuts off is
+  // the oldest end of the board rather than an arbitrary slice.
+  const startedAt = Date.now();
+  const runDeadlineMs = 40_000;
 
   const sitemapResponse = await fetch(board.sitemapUrl, {
     next: { revalidate: 300 },
@@ -151,9 +137,11 @@ export async function fetchLatestExpediaJobs(options: { maxJobs?: number } = {})
     .sort((left, right) => (right.lastmod ?? "").localeCompare(left.lastmod ?? ""))
     .slice(0, maxJobs);
 
-  const jobs = await mapWithConcurrency<{ url: string; lastmod: string | null }, GreenhouseJob | null>(
+  const jobs = await mapWithinDeadline<{ url: string; lastmod: string | null }, GreenhouseJob | null>(
     entries,
-    8,
+    detailConcurrency,
+    startedAt,
+    runDeadlineMs,
     async (entry): Promise<GreenhouseJob | null> => {
     try {
       const response = await fetch(entry.url, {

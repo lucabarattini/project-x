@@ -191,8 +191,12 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
       run: () => fetchLatestWorkdayJobs(),
     },
     {
+      // One detail fetch per posting over a ~200-entry sitemap, which is the
+      // same shape as Meta below rather than the quick list APIs above. At
+      // 25s it timed out on every cold snapshot and the whole board was
+      // dropped as unavailable.
       provider: "expedia",
-      timeoutMs: 25_000,
+      timeoutMs: 50_000,
       run: () => fetchLatestExpediaJobs(),
     },
     {
