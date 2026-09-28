@@ -5,7 +5,6 @@ import {
   useCallback,
   useEffect,
   useState,
-  useTransition,
   type ReactNode,
 } from "react";
 import { Icon, type IconName } from "@/components/ui/Icon";
@@ -118,6 +117,16 @@ function SectionCard({ children, className = "" }: { children: ReactNode; classN
   return <div className={`card overflow-hidden ${className}`}>{children}</div>;
 }
 
+/**
+ * Whether `query` is still the search the address bar is showing. Every filter
+ * change rewrites the URL before it fetches, so the URL is the record of which
+ * request is the live one, and a slower earlier response can be dropped
+ * without tracking request ids by hand.
+ */
+function isCurrentQuery(query: string) {
+  return window.location.search === query;
+}
+
 export function JobDashboard({
   boards,
   companyCounts,
@@ -128,7 +137,7 @@ export function JobDashboard({
   diagnostics,
 }: Props) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
 
   const [params, setParams] = useState<JobSearchParams>(initialParams);
   const [qDraft, setQDraft] = useState(initialParams.q);
@@ -141,6 +150,47 @@ export function JobDashboard({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date>(() => new Date());
   const [widenedDefault, setWidenedDefault] = useState<{ date: DateFilter; todayCount: number } | null>(null);
+
+  /**
+   * Applies a filter change without leaving the page.
+   *
+   * This used to be `router.replace`, which re-runs the server component: it
+   * rebuilds the company counts across every snapshot entry and re-serializes
+   * the whole dashboard — both 94-board source lists included — into a fresh
+   * RSC payload, roughly half a megabyte to swap twenty-five rows. Switching
+   * portals paid that price on every click.
+   *
+   * The results are the only thing that actually changes, and /api/jobs/search
+   * already returns exactly them, so the change is a small JSON fetch and the
+   * URL is kept shareable with a history entry instead of a navigation.
+   */
+  const applySearch = useCallback((next: JobSearchParams) => {
+    setParams(next);
+    const query = serializeSearchParams(next);
+    window.history.replaceState(null, "", `/${query}`);
+
+    setIsPending(true);
+    setLoadMoreError(null);
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/jobs/search?${query.replace(/^\?/u, "")}`);
+        if (!response.ok) throw new Error(`Search failed (${response.status})`);
+        const data = await response.json() as JobSearchResult;
+        // A newer click already rewrote the URL: its response is the real one.
+        if (!isCurrentQuery(query)) return;
+        setResults(data.jobs);
+        setNextCursor(data.nextCursor);
+        setTotal(data.total);
+        setCompaniesInResults(data.companies);
+      } catch (error) {
+        if (!isCurrentQuery(query)) return;
+        setLoadMoreError(error instanceof Error ? error.message : "Could not update the results.");
+      } finally {
+        if (isCurrentQuery(query)) setIsPending(false);
+      }
+    })();
+  }, []);
 
   // Keep local state in sync with the server-rendered result page.
   // Deferred to the next frame so a navigation never cascades renders
@@ -171,34 +221,22 @@ export function JobDashboard({
   useEffect(() => {
     if (qDraft === params.q) return;
     const id = window.setTimeout(() => {
-      const next = { ...params, q: qDraft.trim().slice(0, 200) };
-      setParams(next);
-      startTransition(() => {
-        router.replace(`/${serializeSearchParams(next)}`);
-      });
+      applySearch({ ...params, q: qDraft.trim().slice(0, 200) });
     }, 350);
     return () => window.clearTimeout(id);
-  }, [qDraft, params, router, startTransition]);
+  }, [applySearch, qDraft, params]);
 
   const updateParams = useCallback(
     (patch: Partial<JobSearchParams>) => {
-      const next = { ...params, ...patch };
-      setParams(next);
-      startTransition(() => {
-        router.replace(`/${serializeSearchParams(next)}`);
-      });
+      applySearch({ ...params, ...patch });
     },
-    [params, router, startTransition],
+    [applySearch, params],
   );
 
   const resetFilters = useCallback(() => {
     setQDraft("");
-    const next = { ...defaultSearchParams };
-    setParams(next);
-    startTransition(() => {
-      router.replace(`/${serializeSearchParams(next)}`);
-    });
-  }, [router, startTransition]);
+    applySearch({ ...defaultSearchParams });
+  }, [applySearch]);
 
   // The default "today" window can be nearly empty at some hours. Widen the
   // date filter once so the page never renders as a dead feed, and say so.
@@ -271,10 +309,7 @@ export function JobDashboard({
       roleTypes: portal === "tech" ? [...defaultSearchParams.roleTypes] : [],
       families: portal === "non-tech" ? [...nonTechnicalFamilies] : [...defaultSearchParams.families],
     };
-    setParams(next);
-    startTransition(() => {
-      router.replace(`/${serializeSearchParams(next)}`);
-    });
+    applySearch(next);
   }
 
   async function loadMore() {

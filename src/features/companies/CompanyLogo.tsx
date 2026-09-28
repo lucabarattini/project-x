@@ -11,6 +11,22 @@ const sizeClasses = {
   lg: "h-14 w-14 rounded-2xl text-sm",
 };
 
+/**
+ * Rendered pixel size per variant, matching sizeClasses above.
+ *
+ * These logos are always painted at a fixed box, so they take `width`/`height`
+ * rather than `fill`. With `fill` Next cannot know the intrinsic size and
+ * emits the whole responsive ladder — a 32px logo shipped a 15-entry srcset
+ * running up to 3840w, with the bare `src` pointing at the 3840w render. That
+ * was ~1.1kB of markup per logo and 257kB across the page, to paint a favicon.
+ * Fixed dimensions collapse it to the 1x/2x pair the box can actually use.
+ */
+const sizePixels = {
+  sm: 32,
+  md: 44,
+  lg: 56,
+};
+
 type CompanyLogoProps = {
   company: string;
   size?: keyof typeof sizeClasses;
@@ -37,11 +53,11 @@ export function CompanyLogo({
       {logoPath && failedLogoPath !== logoPath ? (
         <Image
           alt=""
-          className="object-contain p-[18%]"
-          fill
+          className="h-full w-full object-contain p-[18%]"
+          height={sizePixels[size]}
           onError={() => setFailedLogoPath(logoPath)}
-          sizes={size === "lg" ? "56px" : size === "md" ? "44px" : "32px"}
           src={logoPath}
+          width={sizePixels[size]}
         />
       ) : (
         <span className={`flex h-full w-full items-center justify-center ${companyLogoClassName(company)}`}>
