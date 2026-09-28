@@ -54,3 +54,34 @@ test("the bar is exactly half the sources", () => {
   assert.equal(snapshotRejectionReason(100, diagnostics(["ok", "ok", "timeout", "error"])), "2 of 4 sources failed");
   assert.equal(snapshotRejectionReason(100, diagnostics(["ok", "ok", "ok", "timeout"])), null);
 });
+
+test("a build that lost most of the board is rejected however its sources reported", () => {
+  // The bug this exists for: five of eleven sources refused us, which sits one
+  // short of the "half the sources" bar, so the build was cached and served as
+  // a board of two roles against the ~14k that were there ten minutes earlier.
+  const justUnderTheBar = diagnostics([
+    "error", "error", "error", "error", "error",
+    "empty", "empty", "empty", "empty", "ok", "ok",
+  ]);
+  assert.equal(snapshotRejectionReason(2, justUnderTheBar), null);
+  assert.equal(
+    snapshotRejectionReason(2, justUnderTheBar, 14_000),
+    "2 entries against 14000 in the last good build",
+  );
+});
+
+test("the size rule only bites on a real collapse, not on normal churn", () => {
+  // Boards move by hundreds between builds; that must never be read as damage.
+  assert.equal(snapshotRejectionReason(13_800, healthy, 14_000), null);
+  assert.equal(snapshotRejectionReason(7_001, healthy, 14_000), null);
+  assert.equal(
+    snapshotRejectionReason(6_999, healthy, 14_000),
+    "6999 entries against 14000 in the last good build",
+  );
+});
+
+test("with no previous build to compare against, the size rule stays out of the way", () => {
+  // A cold instance has nothing to measure against and must not refuse the
+  // first real snapshot it manages to build.
+  assert.equal(snapshotRejectionReason(2, healthy, 0), null);
+});

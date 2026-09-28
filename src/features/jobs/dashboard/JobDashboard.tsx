@@ -362,6 +362,13 @@ export function JobDashboard({
   ));
   const emptyProviders = diagnostics.filter((diagnostic) => diagnostic.status === "empty");
 
+  // The server rebuilds any snapshot older than half an hour before rendering,
+  // so one that reaches the page still carrying that age is a deliberate
+  // fallback: the rebuild was refused and the last real board is being shown
+  // instead. Say so plainly rather than passing hours-old postings off as live.
+  const servedFromFallback =
+    lastCheckedAt.getTime() - Date.parse(snapshotFetchedAt) > 30 * 60 * 1000;
+
   const effectiveCountryLabel =
     params.locations.length > 0 ? "All countries" : params.country === "us" ? "U.S. based" : "All countries";
 
@@ -829,6 +836,18 @@ export function JobDashboard({
               </div>
             ) : null}
 
+            {servedFromFallback ? (
+              <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/15 px-4 py-3 text-xs font-semibold leading-5 text-amber-900 dark:text-amber-300">
+                <Icon name="alert-triangle" className="h-4 w-4 shrink-0" />
+                <span>
+                  Showing the last complete board, fetched {formatRelativeDate(snapshotFetchedAt, lastCheckedAt)}
+                  {providerWarnings.length > 0
+                    ? ` — ${providerWarnings.length} source${providerWarnings.length === 1 ? "" : "s"} are refusing us right now`
+                    : " — the latest refresh could not be trusted"}
+                  . These roles were real when they were collected; a newer refresh will replace them automatically.
+                </span>
+              </p>
+            ) : null}
             {widenedDefault ? (
               <p className="mb-3 rounded-xl border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/15 px-4 py-3 text-xs font-semibold leading-5 text-sky-800 dark:text-sky-300">
                 Only {widenedDefault.todayCount} {widenedDefault.todayCount === 1 ? "role" : "roles"} published today — showing the last{" "}

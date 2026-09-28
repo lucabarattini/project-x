@@ -304,6 +304,7 @@ class UnusableSnapshotError extends Error {
 export function snapshotRejectionReason(
   entryCount: number,
   diagnostics: ProviderDiagnostic[],
+  previousEntryCount = 0,
 ): string | null {
   if (entryCount === 0) {
     return "every source came back empty";
@@ -314,17 +315,53 @@ export function snapshotRejectionReason(
   if (diagnostics.length > 0 && failed * 2 >= diagnostics.length) {
     return `${failed} of ${diagnostics.length} sources failed`;
   }
+  // Counting failed sources is a proxy, and it kept letting real damage
+  // through: a build where five of eleven sources were refused sits just under
+  // the bar, so it was cached and served as a board of two roles. The size of
+  // the result is the fact that actually matters — no ten-minute window
+  // legitimately removes half the openings — and it holds however the sources
+  // chose to report themselves.
+  if (previousEntryCount > 0 && entryCount * 2 < previousEntryCount) {
+    return `${entryCount} entries against ${previousEntryCount} in the last good build`;
+  }
   return null;
 }
 
 async function buildVerifiedSnapshot(): Promise<JobSnapshot> {
   const snapshot = await buildSnapshotInternal();
-  const reason = snapshotRejectionReason(snapshot.entries.length, snapshot.diagnostics);
+  const reason = snapshotRejectionReason(
+    snapshot.entries.length,
+    snapshot.diagnostics,
+    lastGoodEntryCount,
+  );
   if (reason) {
+    // Armed here rather than in rebuildSnapshot because a chunk read builds
+    // too: without this a cold instance ran the whole fan-out twice in a row
+    // before it would admit the sources were refusing it.
+    unusableRebuildAt = Date.now();
     throw new UnusableSnapshotError(snapshot, reason);
   }
+  lastGoodEntryCount = snapshot.entries.length;
+  unusableRebuildAt = 0;
   return snapshot;
 }
+
+/**
+ * Entry count of the last snapshot known to be real. The guard above compares
+ * a fresh build against it, so it is refreshed both from a successful build and
+ * from the persisted chunks — a cold instance that has never built anything
+ * still knows how big the board is supposed to be.
+ */
+let lastGoodEntryCount = 0;
+
+/**
+ * When a rebuild comes back unusable, stop attempting another one on every
+ * request. The sources that refused us keep refusing for a while, each attempt
+ * costs a full eleven-provider fan-out, and the visitor waits through all of it
+ * only to be served the fallback anyway.
+ */
+let unusableRebuildAt = 0;
+const rebuildRetryCooldownMs = 2 * 60 * 1000;
 
 let snapshotBuild: Promise<JobSnapshot> | null = null;
 
@@ -397,21 +434,10 @@ async function buildAndCache(): Promise<JobSnapshot> {
  * are re-read; if those are also expired, the rebuild blocks that one request
  * — exactly "expiration is refreshed by the first subsequent request".
  */
-export async function getSnapshot(): Promise<JobSnapshot> {
-  if (moduleSnapshot && Date.now() - Date.parse(moduleSnapshot.fetchedAt) < snapshotTtlMs) {
-    return moduleSnapshot;
-  }
-
+/** Reassembles the persisted snapshot from its chunks, or null if there is none. */
+async function readCachedSnapshot(): Promise<JobSnapshot | null> {
   try {
     const first = await getSnapshotChunk("0");
-
-    // Stale-while-revalidate may hand back an entry far older than the TTL.
-    // Rebuild synchronously rather than render a stale day against a
-    // "today" filter that will then legitimately match nothing.
-    if (isStaleBeyondLimit(first.fetchedAt)) {
-      return rebuildSnapshot();
-    }
-
     const chunkCount = Math.ceil(first.jobCount / snapshotChunkSize);
     const rest = chunkCount > 1
       ? await Promise.all(
@@ -420,36 +446,78 @@ export async function getSnapshot(): Promise<JobSnapshot> {
           ),
         )
       : [];
-    const snapshot: JobSnapshot = {
+    lastGoodEntryCount = Math.max(lastGoodEntryCount, first.jobCount);
+    return {
       entries: [...first.items, ...rest.flatMap((chunk) => chunk.items)],
       fetchedAt: first.fetchedAt,
       diagnostics: first.diagnostics,
     };
-    moduleSnapshot = snapshot;
-    return snapshot;
   } catch {
-    return rebuildSnapshot();
+    return null;
   }
+}
+
+export async function getSnapshot(): Promise<JobSnapshot> {
+  if (moduleSnapshot && Date.now() - Date.parse(moduleSnapshot.fetchedAt) < snapshotTtlMs) {
+    return moduleSnapshot;
+  }
+
+  const cached = await readCachedSnapshot();
+
+  // Stale-while-revalidate may hand back an entry far older than the TTL, and
+  // a personal site is idle for most of the day — so this branch, not the
+  // background refresh, is what most visits actually take. It used to discard
+  // `cached` before rebuilding, which is how a refused rebuild could put a
+  // two-role board on screen while a complete one sat in hand. The rebuild now
+  // carries that snapshot as its fallback, and backs off after one failure
+  // instead of making every visitor wait out the same doomed fan-out.
+  const stale = !cached || isStaleBeyondLimit(cached.fetchedAt);
+  const retryable = Date.now() - unusableRebuildAt >= rebuildRetryCooldownMs;
+  if (stale && retryable) {
+    return rebuildSnapshot(cached);
+  }
+
+  if (cached) {
+    moduleSnapshot = cached;
+    return cached;
+  }
+  // Nothing persisted and still inside the backoff: this instance's own copy
+  // is the last real board there is.
+  if (moduleSnapshot) {
+    return moduleSnapshot;
+  }
+  return rebuildSnapshot(null);
 }
 
 /**
  * Rebuilds and promotes the result to the module fast path. When the rebuild is
- * unusable, the last real snapshot is served instead — past its TTL is still far
- * better than a hollowed-out board — and nothing is written to the module copy
- * or the chunk cache, so the next request retries the sources.
+ * unusable the last real snapshot is served instead, however old it is: the
+ * openings in it were real, and a board that has lost most of its sources is
+ * not more honest for being fresh. Nothing is written to the module copy or the
+ * chunk cache, so a later request can still pick up a healthy build.
+ *
+ * The fresh diagnostics ride along on the fallback, so the dashboard reports
+ * which sources are down right now rather than how they looked when the
+ * snapshot it is showing was built.
  */
-async function rebuildSnapshot(): Promise<JobSnapshot> {
+async function rebuildSnapshot(fallback: JobSnapshot | null): Promise<JobSnapshot> {
   try {
     const snapshot = await buildAndCache();
     moduleSnapshot = snapshot;
+    unusableRebuildAt = 0;
     return snapshot;
   } catch (error) {
     if (!(error instanceof UnusableSnapshotError)) {
       throw error;
     }
-    // No previous snapshot to fall back on: report the failure honestly
-    // rather than rendering an empty board as if it were a real result.
-    return moduleSnapshot ?? error.snapshot;
+    unusableRebuildAt = Date.now();
+    const previous = fallback ?? moduleSnapshot;
+    if (previous) {
+      return { ...previous, diagnostics: error.snapshot.diagnostics };
+    }
+    // Nothing real has ever been built on this instance: report the failure
+    // honestly rather than rendering an empty board as if it were a result.
+    return error.snapshot;
   }
 }
 

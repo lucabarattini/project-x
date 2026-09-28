@@ -1,4 +1,5 @@
 import boards from "../../../../data/ashby-boards.json";
+import { collectBoardResults } from "./concurrency";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
 type AshbyApiJob = {
@@ -113,11 +114,11 @@ export async function fetchLatestAshbyJobs(options: FetchAshbyJobsOptions = {}) 
         })
         .filter((job): job is GreenhouseJob => job !== null);
     } catch {
-      return [];
+      return null;
     }
   });
 
-  const sortedJobs = results.flat().sort((a, b) => {
+  const sortedJobs = collectBoardResults("ashby", results).sort((a, b) => {
     const left = a.postedAt ? Date.parse(a.postedAt) : 0;
     const right = b.postedAt ? Date.parse(b.postedAt) : 0;
     return right - left;

@@ -169,6 +169,9 @@ export async function fetchLatestMetaJobs(options: { maxJobs?: number } = {}) {
   }
 
   const urls = parseMetaSitemap(await sitemapResponse.text()).slice(0, maxJobs);
+  if (urls.length === 0) {
+    throw new Error("Meta sitemap carried no job URLs");
+  }
 
   const jobs = await mapWithinDeadline<string, GreenhouseJob | null>(
     urls,
@@ -203,5 +206,12 @@ export async function fetchLatestMetaJobs(options: { maxJobs?: number } = {}) {
     },
   );
 
-  return jobs.filter((job): job is GreenhouseJob => job !== null);
+  const parsed = jobs.filter((job): job is GreenhouseJob => job !== null);
+  // The sitemap listed postings and not one of them came back: that is the
+  // origin refusing us, not Meta having closed every req. Reported as empty it
+  // would read as a quiet day and count as a healthy source.
+  if (parsed.length === 0) {
+    throw new Error(`Meta returned nothing for ${urls.length} listed postings`);
+  }
+  return parsed;
 }

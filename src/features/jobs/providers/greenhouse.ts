@@ -1,4 +1,5 @@
 import boards from "../../../../data/greenhouse-boards.json";
+import { collectBoardResults } from "./concurrency";
 import jobUrlOverrides from "../../../../data/job-url-overrides.json";
 
 export type GreenhouseBoard = {
@@ -196,11 +197,11 @@ export async function fetchLatestGreenhouseJobs(
         updatedAt: job.updated_at ?? null,
       }));
     } catch {
-      return [];
+      return null;
     }
   });
 
-  const sortedJobs = results.flat().sort((a, b) => {
+  const sortedJobs = collectBoardResults("greenhouse", results).sort((a, b) => {
     const left = a.postedAt ? Date.parse(a.postedAt) : 0;
     const right = b.postedAt ? Date.parse(b.postedAt) : 0;
     return right - left;

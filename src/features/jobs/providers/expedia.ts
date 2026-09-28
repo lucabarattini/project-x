@@ -137,6 +137,10 @@ export async function fetchLatestExpediaJobs(options: { maxJobs?: number } = {})
     .sort((left, right) => (right.lastmod ?? "").localeCompare(left.lastmod ?? ""))
     .slice(0, maxJobs);
 
+  if (entries.length === 0) {
+    throw new Error("Expedia sitemap carried no job URLs");
+  }
+
   const jobs = await mapWithinDeadline<{ url: string; lastmod: string | null }, GreenhouseJob | null>(
     entries,
     detailConcurrency,
@@ -178,5 +182,11 @@ export async function fetchLatestExpediaJobs(options: { maxJobs?: number } = {})
     },
   );
 
-  return jobs.filter((job): job is GreenhouseJob => job !== null);
+  const parsed = jobs.filter((job): job is GreenhouseJob => job !== null);
+  // Same rule as Meta: a sitemap full of postings that yields no job is an
+  // outage, and must not be filed as a board with no openings.
+  if (parsed.length === 0) {
+    throw new Error(`Expedia returned nothing for ${entries.length} listed postings`);
+  }
+  return parsed;
 }

@@ -1,4 +1,5 @@
 import boards from "../../../../data/workday-boards.json";
+import { collectBoardResults } from "./concurrency";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
 type WorkdayBoard = GreenhouseBoard & {
@@ -200,12 +201,12 @@ export async function fetchLatestWorkdayJobs() {
         const jobs = await searchWorkdayBoard(board);
         return enrichWorkdayDetails(jobs, board, startedAt, 15_000);
       } catch {
-        return [];
+        return null;
       }
     }),
   );
 
-  return results.flat().sort((a, b) => {
+  return collectBoardResults("workday", results).sort((a, b) => {
     const left = a.postedAt ? Date.parse(a.postedAt) : 0;
     const right = b.postedAt ? Date.parse(b.postedAt) : 0;
     return right - left;
