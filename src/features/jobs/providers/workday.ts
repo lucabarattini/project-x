@@ -22,6 +22,7 @@ type WorkdaySearchJob = {
 };
 
 type WorkdaySearchResponse = {
+  total?: number;
   jobPostings?: WorkdaySearchJob[];
 };
 
@@ -106,15 +107,23 @@ async function fetchWorkdayDetail(board: WorkdayBoard, externalPath: string) {
 
 async function searchWorkdayBoard(board: WorkdayBoard): Promise<WorkdayListJob[]> {
   const allJobs: WorkdayListJob[] = [];
+  // Only page one reports the total, and past it Workday serves page one
+  // again rather than an empty page, so the loop stops on the total.
+  let total = Infinity;
 
   for (let page = 0; page < maxSearchPages; page += 1) {
     const offset = page * searchPageSize;
+    // Nordstrom's tenant takes ~7 s a page and times out on some, which used
+    // to throw away the pages already read. Only page one failing is an outage.
     const response = await fetch(board.apiUrl, {
       method: "POST",
       next: { revalidate: 300 },
       signal: AbortSignal.timeout(8_000),
       headers: {
         accept: "application/json",
+        // Node sends "accept-language: *", which Nordstrom's tenant answers
+        // with HTTP 500 on page one.
+        "accept-language": "en-US",
         "content-type": "application/json",
         "user-agent": "Mozilla/5.0",
       },
@@ -124,13 +133,19 @@ async function searchWorkdayBoard(board: WorkdayBoard): Promise<WorkdayListJob[]
         offset,
         searchText: "",
       }),
+    }).catch((error: unknown) => {
+      if (page === 0) throw error;
+      return null;
     });
 
+    if (!response) break;
     if (!response.ok) {
+      if (page > 0) break;
       throw new Error(`${board.company} returned ${response.status}`);
     }
 
     const data = (await response.json()) as WorkdaySearchResponse;
+    if (page === 0 && data.total) total = data.total;
     const postings = data.jobPostings ?? [];
     for (const job of postings) {
       if (!job.externalPath) {
@@ -150,7 +165,7 @@ async function searchWorkdayBoard(board: WorkdayBoard): Promise<WorkdayListJob[]
       });
     }
 
-    if (postings.length < searchPageSize) {
+    if (postings.length < searchPageSize || offset + postings.length >= total) {
       break;
     }
   }
