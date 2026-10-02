@@ -474,7 +474,8 @@ async function readCachedSnapshot(): Promise<JobSnapshot | null> {
       fetchedAt: first.fetchedAt,
       diagnostics: first.diagnostics,
     };
-  } catch {
+  } catch (error) {
+    console.log(`[snapshot-debug] read failed: ${error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 400) : String(error)}`);
     return null;
   }
 }
