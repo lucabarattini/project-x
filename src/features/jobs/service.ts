@@ -437,7 +437,7 @@ const getSnapshotChunk = unstable_cache(
     const separator = key.indexOf(":");
     if (separator < 0) {
       const newest = [...builtSnapshots.values()].at(-1);
-      const snapshot = newest && !isStaleBeyondTtl(newest.fetchedAt)
+      const snapshot = newest && Date.now() - Date.parse(newest.fetchedAt) < snapshotTtlMs
         ? newest
         : await ensureSnapshotBuild();
       await writeLaterChunks(snapshot);
@@ -452,10 +452,6 @@ const getSnapshotChunk = unstable_cache(
   ["job-snapshot-chunk-v15"],
   { revalidate: snapshotRevalidateSeconds },
 );
-
-function isStaleBeyondTtl(fetchedAt: string) {
-  return Date.now() - Date.parse(fetchedAt) >= snapshotTtlMs;
-}
 
 let moduleSnapshot: JobSnapshot | null = null;
 
@@ -473,12 +469,6 @@ async function buildAndCache(): Promise<JobSnapshot> {
   return snapshot;
 }
 
-/**
- * Correct caching model: the module copy is only a fast path. Once it is
- * older than the TTL it is discarded and the persisted (cross-bundle) chunks
- * are re-read; if those are also expired, the rebuild blocks that one request
- * — exactly "expiration is refreshed by the first subsequent request".
- */
 /** Reassembles the persisted snapshot from its chunks, or null if there is none. */
 async function readCachedSnapshot(): Promise<JobSnapshot | null> {
   try {
