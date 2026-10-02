@@ -370,5 +370,473 @@
   "Zillow": {
     "domain": "zillow.com",
     "logoPath": "/company-logos/zillow.png"
+  },
+  "Snorkel AI": {
+    "domain": "snorkel.ai",
+    "logoPath": "/company-logos/snorkelai.png"
+  },
+  "xAI": {
+    "domain": "x.ai",
+    "logoPath": "/company-logos/xai.png"
+  },
+  "Hark": {
+    "domain": "hark.ai",
+    "logoPath": "/company-logos/hark.png"
+  },
+  "Hudson River Trading": {
+    "domain": "hudsonrivertrading.com",
+    "logoPath": "/company-logos/hudsonrivertrading.png"
+  },
+  "Akuna Capital": {
+    "domain": "akunacapital.com",
+    "logoPath": "/company-logos/akunacapital.png"
+  },
+  "DV Trading": {
+    "domain": "dvtrading.co",
+    "logoPath": "/company-logos/dvtrading.png"
+  },
+  "Engineers Gate": {
+    "domain": "engineersgate.com",
+    "logoPath": "/company-logos/engineersgate.png"
+  },
+  "ExodusPoint": {
+    "domain": "exoduspoint.com",
+    "logoPath": "/company-logos/exoduspoint.png"
+  },
+  "Flow Traders": {
+    "domain": "flowtraders.com",
+    "logoPath": "/company-logos/flowtraders.png"
+  },
+  "Geneva Trading": {
+    "domain": "genevatrading.com",
+    "logoPath": "/company-logos/genevatrading.png"
+  },
+  "Man Group": {
+    "domain": "man.com",
+    "logoPath": "/company-logos/mangroup.png"
+  },
+  "Old Mission": {
+    "domain": "oldmissioncapital.com",
+    "logoPath": "/company-logos/oldmission.png"
+  },
+  "Schonfeld": {
+    "domain": "schonfeld.com",
+    "logoPath": "/company-logos/schonfeld.png"
+  },
+  "Squarepoint Capital": {
+    "domain": "squarepoint-capital.com",
+    "logoPath": "/company-logos/squarepointcapital.png"
+  },
+  "TransMarket Group": {
+    "domain": "transmarketgroup.com",
+    "logoPath": "/company-logos/transmarketgroup.png"
+  },
+  "Vatic Labs": {
+    "domain": "vaticlabs.com",
+    "logoPath": "/company-logos/vaticlabs.png"
+  },
+  "WorldQuant": {
+    "domain": "worldquant.com",
+    "logoPath": "/company-logos/worldquant.png"
+  },
+  "Xantium": {
+    "domain": "xantium.com",
+    "logoPath": "/company-logos/xantium.png"
+  },
+  "VivCourt": {
+    "domain": "vivcourt.com",
+    "logoPath": "/company-logos/vivcourt.png"
+  },
+  "Voloridge": {
+    "domain": "voloridge.com",
+    "logoPath": "/company-logos/voloridge.png"
+  },
+  "Brex": {
+    "domain": "brex.com",
+    "logoPath": "/company-logos/brex.png"
+  },
+  "Nintendo": {
+    "domain": "nintendo.com",
+    "logoPath": "/company-logos/nintendo.png"
+  },
+  "Pinterest": {
+    "domain": "pinterest.com",
+    "logoPath": "/company-logos/pinterest.png"
+  },
+  "Truveta": {
+    "domain": "truveta.com",
+    "logoPath": "/company-logos/truveta.png"
+  },
+  "Carta": {
+    "domain": "carta.com",
+    "logoPath": "/company-logos/carta.png"
+  },
+  "Smartsheet": {
+    "domain": "smartsheet.com",
+    "logoPath": "/company-logos/smartsheet.png"
+  },
+  "Flexport": {
+    "domain": "flexport.com",
+    "logoPath": "/company-logos/flexport.png"
+  },
+  "Scale AI": {
+    "domain": "scale.com",
+    "logoPath": "/company-logos/scaleai.png"
+  },
+  "Samsara": {
+    "domain": "samsara.com",
+    "logoPath": "/company-logos/samsara.png"
+  },
+  "OfferUp": {
+    "domain": "offerup.com",
+    "logoPath": "/company-logos/offerup.png"
+  },
+  "Turbopuffer": {
+    "domain": "turbopuffer.com",
+    "logoPath": "/company-logos/turbopuffer.png"
+  },
+  "Convex": {
+    "domain": "convex.dev",
+    "logoPath": "/company-logos/convex.png"
+  },
+  "Firecrawl": {
+    "domain": "firecrawl.dev",
+    "logoPath": "/company-logos/firecrawl.png"
+  },
+  "Attio": {
+    "domain": "attio.com",
+    "logoPath": "/company-logos/attio.png"
+  },
+  "Linear": {
+    "domain": "linear.app",
+    "logoPath": "/company-logos/linear.png"
+  },
+  "Warp": {
+    "domain": "joinwarp.com",
+    "logoPath": "/company-logos/warp.png"
+  },
+  "Vizcom": {
+    "domain": "vizcom.ai",
+    "logoPath": "/company-logos/vizcom.png"
+  },
+  "PostHog": {
+    "domain": "posthog.com",
+    "logoPath": "/company-logos/posthog.png"
+  },
+  "Sieve": {
+    "domain": "sievedata.com",
+    "logoPath": "/company-logos/sieve.png"
+  },
+  "Artie": {
+    "domain": "artie.com",
+    "logoPath": "/company-logos/artie.png"
+  },
+  "Concurrence": {
+    "domain": "concurrence.com",
+    "logoPath": "/company-logos/concurrence.png"
+  },
+  "Enclave AI": {
+    "domain": "enclave.ai",
+    "logoPath": "/company-logos/enclaveai.png"
+  },
+  "Revel": {
+    "domain": "revel.ai",
+    "logoPath": "/company-logos/revel.png"
+  },
+  "Baba": {
+    "domain": "callbaba.com",
+    "logoPath": "/company-logos/baba.png"
+  },
+  "Tremendous": {
+    "domain": "tremendous.com",
+    "logoPath": "/company-logos/tremendous.png"
+  },
+  "Searchable": {
+    "domain": "searchable.com",
+    "logoPath": "/company-logos/searchable.png"
+  },
+  "Duna": {
+    "domain": "duna.com",
+    "logoPath": "/company-logos/duna.png"
+  },
+  "Nexcade": {
+    "domain": "nexcade.ai",
+    "logoPath": "/company-logos/nexcade.png"
+  },
+  "Gumloop": {
+    "domain": "gumloop.com",
+    "logoPath": "/company-logos/gumloop.png"
+  },
+  "CLAR AI": {
+    "domain": "clar.ai",
+    "logoPath": "/company-logos/clarai.png"
+  },
+  "Valkai": {
+    "domain": "valkai.com",
+    "logoPath": "/company-logos/valkai.png"
+  },
+  "Keycard": {
+    "domain": "keycard.ai",
+    "logoPath": "/company-logos/keycard.png"
+  },
+  "Skydio": {
+    "domain": "skydio.com",
+    "logoPath": "/company-logos/skydio.png"
+  },
+  "Forus": {
+    "domain": "forus.com",
+    "logoPath": "/company-logos/forus.png"
+  },
+  "Harmonic AI": {
+    "domain": "harmonic.ai",
+    "logoPath": "/company-logos/harmonicai.png"
+  },
+  "Etched": {
+    "domain": "etched.com",
+    "logoPath": "/company-logos/etched.png"
+  },
+  "Resend": {
+    "domain": "resend.com",
+    "logoPath": "/company-logos/resend.png"
+  },
+  "Prime Intellect": {
+    "domain": "primeintellect.ai",
+    "logoPath": "/company-logos/primeintellect.png"
+  },
+  "Novig": {
+    "domain": "novig.us",
+    "logoPath": "/company-logos/novig.png"
+  },
+  "LM Studio": {
+    "domain": "lmstudio.ai",
+    "logoPath": "/company-logos/lmstudio.png"
+  },
+  "Pangram Labs": {
+    "domain": "pangram.com",
+    "logoPath": "/company-logos/pangramlabs.png"
+  },
+  "Vals AI": {
+    "domain": "vals.ai",
+    "logoPath": "/company-logos/valsai.png"
+  },
+  "Wafer": {
+    "domain": "wafer.ai",
+    "logoPath": "/company-logos/wafer.png"
+  },
+  "Liquid AI": {
+    "domain": "liquid.ai",
+    "logoPath": "/company-logos/liquidai.png"
+  },
+  "Harmonic": {
+    "domain": "harmonic.fun",
+    "logoPath": "/company-logos/harmonic.png"
+  },
+  "Irregular": {
+    "domain": "irregular.com",
+    "logoPath": "/company-logos/irregular.png"
+  },
+  "Namespace": {
+    "domain": "namespace.so",
+    "logoPath": "/company-logos/namespace.png"
+  },
+  "Odyssey": {
+    "domain": "odyssey.world",
+    "logoPath": "/company-logos/odyssey.png"
+  },
+  "Antares": {
+    "domain": "antaresindustries.com",
+    "logoPath": "/company-logos/antares.png"
+  },
+  "Dyna Robotics": {
+    "domain": "dyna.co",
+    "logoPath": "/company-logos/dynarobotics.png"
+  },
+  "Sunday": {
+    "domain": "sunday.ai",
+    "logoPath": "/company-logos/sunday.png"
+  },
+  "Trajectory": {
+    "domain": "trajectory.ai",
+    "logoPath": "/company-logos/trajectory.png"
+  },
+  "Simile": {
+    "domain": "simile.ai",
+    "logoPath": "/company-logos/simile.png"
+  },
+  "Parallel Web Systems": {
+    "domain": "parallel.ai",
+    "logoPath": "/company-logos/parallelwebsystems.png"
+  },
+  "Ineffable Intelligence": {
+    "domain": "ineffable.ai",
+    "logoPath": "/company-logos/ineffableintelligence.png"
+  },
+  "Human Archive": {
+    "domain": "humanarchive.ai",
+    "logoPath": "/company-logos/humanarchive.png"
+  },
+  "Taste Labs": {
+    "domain": "tastelabs.ai",
+    "logoPath": "/company-logos/tastelabs.png"
+  },
+  "Prosper AI": {
+    "domain": "getprosper.ai",
+    "logoPath": "/company-logos/prosperai.png"
+  },
+  "Broccoli AI": {
+    "domain": "broccoli.ai",
+    "logoPath": "/company-logos/broccoliai.png"
+  },
+  "Norm Law": {
+    "domain": "normlaw.com",
+    "logoPath": "/company-logos/normlaw.png"
+  },
+  "Corgi": {
+    "domain": "corgi.insure",
+    "logoPath": "/company-logos/corgi.png"
+  },
+  "microagi": {
+    "domain": "microagi.ai",
+    "logoPath": "/company-logos/microagi.png"
+  },
+  "Conduct": {
+    "domain": "conduct.ai",
+    "logoPath": "/company-logos/conduct.png"
+  },
+  "Probook": {
+    "domain": "probook.ai",
+    "logoPath": "/company-logos/probook.png"
+  },
+  "XDOF": {
+    "domain": "xdof.ai",
+    "logoPath": "/company-logos/xdof.png"
+  },
+  "TENEX.AI": {
+    "domain": "tenex.ai",
+    "logoPath": "/company-logos/tenexai.png"
+  },
+  "Amperos": {
+    "domain": "amperos.com",
+    "logoPath": "/company-logos/amperos.png"
+  },
+  "Telepatia": {
+    "domain": "telepatia.ai",
+    "logoPath": "/company-logos/telepatia.png"
+  },
+  "viktor": {
+    "domain": "getviktor.com",
+    "logoPath": "/company-logos/viktor.png"
+  },
+  "Aaru": {
+    "domain": "aaru.com",
+    "logoPath": "/company-logos/aaru.png"
+  },
+  "Poetic": {
+    "domain": "poetic.ai",
+    "logoPath": "/company-logos/poetic.png"
+  },
+  "Runlayer": {
+    "domain": "runlayer.com",
+    "logoPath": "/company-logos/runlayer.png"
+  },
+  "AfterQuery": {
+    "domain": "afterquery.com",
+    "logoPath": "/company-logos/afterquery.png"
+  },
+  "Armadin": {
+    "domain": "armadin.ai",
+    "logoPath": "/company-logos/armadin.png"
+  },
+  "Tessera Labs": {
+    "domain": "tesseralabs.ai",
+    "logoPath": "/company-logos/tesseralabs.png"
+  },
+  "duvo.ai": {
+    "domain": "duvo.ai",
+    "logoPath": "/company-logos/duvoai.png"
+  },
+  "Monaco": {
+    "domain": "monaco.com",
+    "logoPath": "/company-logos/monaco.png"
+  },
+  "Freehand": {
+    "domain": "freehand.ai",
+    "logoPath": "/company-logos/freehand.png"
+  },
+  "Bobyard": {
+    "domain": "bobyard.com",
+    "logoPath": "/company-logos/bobyard.png"
+  },
+  "Higgsfield AI": {
+    "domain": "higgsfield.ai",
+    "logoPath": "/company-logos/higgsfieldai.png"
+  },
+  "Brain Co.": {
+    "domain": "brain.co",
+    "logoPath": "/company-logos/brainco.png"
+  },
+  "Serval": {
+    "domain": "serval.com",
+    "logoPath": "/company-logos/serval.png"
+  },
+  "Snowflake": {
+    "domain": "snowflake.com",
+    "logoPath": "/company-logos/snowflake.png"
+  },
+  "Plaid": {
+    "domain": "plaid.com",
+    "logoPath": "/company-logos/plaid.png"
+  },
+  "Qumulo": {
+    "domain": "qumulo.com",
+    "logoPath": "/company-logos/qumulo.png"
+  },
+  "CopilotKit": {
+    "domain": "copilotkit.ai",
+    "logoPath": "/company-logos/copilotkit.png"
+  },
+  "Ansatz Capital": {
+    "domain": "ansatzcapital.com",
+    "logoPath": "/company-logos/ansatzcapital.png"
+  },
+  "Belvedere Trading": {
+    "domain": "belvederetrading.com",
+    "logoPath": "/company-logos/belvederetrading.png"
+  },
+  "Valkyrie Trading": {
+    "domain": "valkyrietrading.com",
+    "logoPath": "/company-logos/valkyrietrading.png"
+  },
+  "Brooks Running": {
+    "domain": "brooksrunning.com",
+    "logoPath": "/company-logos/brooksrunning.png"
+  },
+  "Rover": {
+    "domain": "rover.com",
+    "logoPath": "/company-logos/rover.png"
+  },
+  "Outreach": {
+    "domain": "outreach.io",
+    "logoPath": "/company-logos/outreach.png"
+  },
+  "Starbucks": {
+    "domain": "starbucks.com",
+    "logoPath": "/company-logos/starbucks.png"
+  },
+  "Nordstrom": {
+    "domain": "nordstrom.com",
+    "logoPath": "/company-logos/nordstrom.png"
+  },
+  "T-Mobile": {
+    "domain": "t-mobile.com",
+    "logoPath": "/company-logos/tmobile.png"
+  },
+  "Boeing": {
+    "domain": "boeing.com",
+    "logoPath": "/company-logos/boeing.png"
+  },
+  "F5": {
+    "domain": "f5.com",
+    "logoPath": "/company-logos/f5.png"
   }
 }

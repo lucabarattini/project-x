@@ -30,6 +30,8 @@ const iconOverrides = {
   "Virtu Financial": null,
   "Voleon": null,
   "TCS": "siTata",
+  // simple-icons' Warp is the terminal (warp.dev), not the payroll company.
+  "Warp": null,
 };
 
 function normalize(value) {
