@@ -484,7 +484,9 @@ export async function getSnapshot(): Promise<JobSnapshot> {
     return moduleSnapshot;
   }
 
+  const readStartedAt = Date.now();
   const cached = await readCachedSnapshot();
+  console.log(`[snapshot-debug] read ${Date.now() - readStartedAt}ms cached=${cached?.fetchedAt ?? "none"} entries=${cached?.entries.length ?? 0} module=${moduleSnapshot?.fetchedAt ?? "none"}`);
 
   // Stale-while-revalidate may hand back an entry far older than the TTL, and
   // a personal site is idle for most of the day — so this branch, not the
