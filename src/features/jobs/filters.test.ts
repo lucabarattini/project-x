@@ -8,6 +8,9 @@ import {
   matchesDate,
   matchesCompany,
   matchesCountry,
+  matchesLocation,
+  remoteUsLocation,
+  seattleAreaLocation,
   sortJobs,
 } from "./filters.ts";
 import type { GreenhouseJob } from "./providers/greenhouse.ts";
@@ -229,6 +232,39 @@ test("matchesCountry defaults to U.S. based jobs", () => {
   assert.equal(matchesCountry("San Francisco Bay Area", "us"), true);
   assert.equal(matchesCountry("London, UK", "us"), false);
   assert.equal(matchesCountry("London, UK", "all"), true);
+});
+
+test("the Seattle area preset covers the Eastside and Washington, not D.C.", () => {
+  for (const location of ["Seattle, WA", "Redmond, Washington, United States", "USA - Bellevue, WA", "Kirkland, WA, US"]) {
+    assert.equal(matchesLocation(location, [seattleAreaLocation]), true, location);
+  }
+  for (const location of ["Washington, D.C", "Washington DC", "New York, NY", "Portland, OR"]) {
+    assert.equal(matchesLocation(location, [seattleAreaLocation]), false, location);
+  }
+});
+
+test("the Remote (US) preset keeps U.S.-open remote roles only", () => {
+  for (const location of ["Remote", "Remote (US)", "US - Remote", "Canada / US / Europe; North America remote", "Remote - New York"]) {
+    assert.equal(matchesLocation(location, [remoteUsLocation]), true, location);
+  }
+  for (const location of ["Remote (EMEA)", "UK - Remote", "India (Remote)", "San Francisco, CA"]) {
+    assert.equal(matchesLocation(location, [remoteUsLocation]), false, location);
+  }
+});
+
+test("presets combine with OR, so Seattle area plus remote is one search", () => {
+  const selected = [seattleAreaLocation, remoteUsLocation];
+  assert.equal(matchesLocation("Bellevue, WA", selected), true);
+  assert.equal(matchesLocation("Remote (US)", selected), true);
+  assert.equal(matchesLocation("Austin, TX", selected), false);
+});
+
+test("the U.S. country default keeps state-coded and U.S.-remote postings", () => {
+  assert.equal(matchesCountry("Austin, TX", "us"), true);
+  assert.equal(matchesCountry("Bellevue, WA", "us"), true);
+  assert.equal(matchesCountry("Remote", "us"), true);
+  assert.equal(matchesCountry("Remote (EMEA)", "us"), false);
+  assert.equal(matchesCountry("London, UK", "us"), false);
 });
 
 test("filterJobs defaults to U.S. based jobs", () => {
