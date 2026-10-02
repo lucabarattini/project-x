@@ -4,6 +4,13 @@ import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
 type WorkdayBoard = GreenhouseBoard & {
   detailUrlBase: string;
+  /**
+   * Workday search facets, e.g. `{ locations: ["<id>"] }`. Large retailers
+   * (T-Mobile, Nordstrom) post thousands of store roles nationwide, so an
+   * unfiltered first 200 rows would never reach their Seattle offices. The
+   * ids come from the `facets` block of an unfiltered search response.
+   */
+  appliedFacets?: Record<string, string[]>;
 };
 
 type WorkdaySearchJob = {
@@ -112,7 +119,7 @@ async function searchWorkdayBoard(board: WorkdayBoard): Promise<WorkdayListJob[]
         "user-agent": "Mozilla/5.0",
       },
       body: JSON.stringify({
-        appliedFacets: {},
+        appliedFacets: board.appliedFacets ?? {},
         limit: searchPageSize,
         offset,
         searchText: "",

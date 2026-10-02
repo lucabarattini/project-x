@@ -16,5 +16,64 @@
     "apiUrl": "https://zillow.wd5.myworkdayjobs.com/wday/cxs/zillow/Zillow_Group_External/jobs",
     "detailUrlBase": "https://zillow.wd5.myworkdayjobs.com/wday/cxs/zillow/Zillow_Group_External",
     "lastVerifiedJobCount": 116
+  },
+  {
+    "company": "Nordstrom",
+    "token": "nordstrom/nordstrom_careers",
+    "source": "official-careers-page,workday-cxs,washington-facet",
+    "boardUrl": "https://nordstrom.wd501.myworkdayjobs.com/en-US/nordstrom_careers",
+    "apiUrl": "https://nordstrom.wd501.myworkdayjobs.com/wday/cxs/nordstrom/nordstrom_careers/jobs",
+    "detailUrlBase": "https://nordstrom.wd501.myworkdayjobs.com/wday/cxs/nordstrom/nordstrom_careers",
+    "lastVerifiedJobCount": 72,
+    "appliedFacets": {
+      "locations": [
+        "c8fdb73683a50112d3023d34321b428c"
+      ]
+    }
+  },
+  {
+    "company": "T-Mobile",
+    "token": "tmobile/External",
+    "source": "official-careers-page,workday-cxs,washington-facet",
+    "boardUrl": "https://tmobile.wd1.myworkdayjobs.com/en-US/External",
+    "apiUrl": "https://tmobile.wd1.myworkdayjobs.com/wday/cxs/tmobile/External/jobs",
+    "detailUrlBase": "https://tmobile.wd1.myworkdayjobs.com/wday/cxs/tmobile/External",
+    "lastVerifiedJobCount": 120,
+    "appliedFacets": {
+      "locationRegionStateProvince": [
+        "de9b48948ef8421db97ddf4ea206e931"
+      ]
+    }
+  },
+  {
+    "company": "Boeing",
+    "token": "boeing/EXTERNAL_CAREERS",
+    "source": "official-careers-page,workday-cxs,washington-facet",
+    "boardUrl": "https://boeing.wd1.myworkdayjobs.com/en-US/EXTERNAL_CAREERS",
+    "apiUrl": "https://boeing.wd1.myworkdayjobs.com/wday/cxs/boeing/EXTERNAL_CAREERS/jobs",
+    "detailUrlBase": "https://boeing.wd1.myworkdayjobs.com/wday/cxs/boeing/EXTERNAL_CAREERS",
+    "lastVerifiedJobCount": 74,
+    "appliedFacets": {
+      "locations": [
+        "8b618a30e00f01225fbe102d1a3f0b7d",
+        "8b618a30e00f01214944052d1a3fe37c",
+        "8b618a30e00f01342a2b132d1a3f157d",
+        "8b618a30e00f01d45f46082d1a3fed7c"
+      ]
+    }
+  },
+  {
+    "company": "F5",
+    "token": "ffive/f5jobs",
+    "source": "official-careers-page,workday-cxs,washington-facet",
+    "boardUrl": "https://ffive.wd5.myworkdayjobs.com/en-US/f5jobs",
+    "apiUrl": "https://ffive.wd5.myworkdayjobs.com/wday/cxs/ffive/f5jobs/jobs",
+    "detailUrlBase": "https://ffive.wd5.myworkdayjobs.com/wday/cxs/ffive/f5jobs",
+    "lastVerifiedJobCount": 43,
+    "appliedFacets": {
+      "locations": [
+        "6150e291faa30123a8f15f16659ae804"
+      ]
+    }
   }
 ]

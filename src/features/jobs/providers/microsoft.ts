@@ -1,8 +1,20 @@
 import boards from "../../../../data/microsoft-boards.json";
-import { mapWithinDeadline, pageConcurrency } from "./concurrency";
+import { detailConcurrency, mapWithinDeadline, pageConcurrency } from "./concurrency";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
-export const microsoftBoards = boards as GreenhouseBoard[];
+/**
+ * Every Eightfold PCSX careers site, not only Microsoft's: Starbucks runs on
+ * the same API. `excludeTitlePattern` drops postings that share the search
+ * radius but belong to no portal — Starbucks' Seattle search is half store
+ * shifts ("barista - Store# 03224").
+ */
+export type PcsxBoard = GreenhouseBoard & {
+  excludeTitlePattern?: string;
+  maxJobs?: number;
+  maxDetails?: number;
+};
+
+export const microsoftBoards = boards as PcsxBoard[];
 
 export type PcsxPosition = {
   id?: string | number;
@@ -114,6 +126,25 @@ export function parsePcsxPositions(
 }
 
 /**
+ * Plain text of a `/api/pcsx/position_details` response's `jobDescription`,
+ * which is where the "N+ years of experience" line lives.
+ */
+export function parsePcsxDescription(json: unknown): string | null {
+  const html = (json as { data?: { jobDescription?: unknown } } | null)?.data?.jobDescription;
+  if (typeof html !== "string" || !html.trim()) return null;
+  return html
+    .replace(/<li[^>]*>/giu, " - ")
+    .replace(/<\/(p|div|li|ul|ol|h\d)>|<br\s*\/?>/giu, "\n")
+    .replace(/<[^>]+>/gu, " ")
+    .replace(/&nbsp;/giu, " ")
+    .replace(/&amp;/giu, "&")
+    .replace(/&quot;/giu, "\"")
+    .replace(/&#39;|&rsquo;/giu, "'")
+    .replace(/[ \t]+/gu, " ")
+    .trim();
+}
+
+/**
  * Reads the reported result count, which page one uses to schedule the rest
  * of the pages in parallel rather than walking them ten rows at a time.
  */
@@ -133,9 +164,11 @@ export function parsePcsxCount(json: unknown): number {
  * `sort_by=timestamp` and bounded: a radar wants the recent end of the board,
  * and stopping at the first 429 keeps the next run's budget intact.
  */
-export async function fetchLatestMicrosoftJobs(options: { maxJobs?: number } = {}) {
-  const { maxJobs = 600 } = options;
-  const board = microsoftBoards[0];
+export async function fetchLatestPcsxJobs(board: PcsxBoard) {
+  const maxJobs = board.maxJobs ?? 600;
+  const excluded = board.excludeTitlePattern
+    ? new RegExp(board.excludeTitlePattern, "iu")
+    : null;
   const pageSize = 10;
   const startedAt = Date.now();
   const runDeadlineMs = 26_000;
@@ -169,6 +202,33 @@ export async function fetchLatestMicrosoftJobs(options: { maxJobs?: number } = {
     }
   }
 
+  async function readDetail(positionId: string) {
+    const url = new URL("/api/pcsx/position_details", board.apiUrl);
+    url.searchParams.set("position_id", positionId);
+    url.searchParams.set("domain", new URL(board.apiUrl).searchParams.get("domain") ?? "");
+    url.searchParams.set("hl", "en");
+    try {
+      const response = await fetch(url, {
+        next: { revalidate: 3600 },
+        signal: AbortSignal.timeout(8_000),
+        headers: {
+          accept: "application/json",
+          referer: board.boardUrl,
+          "user-agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+        },
+      });
+      if (response.status === 429 || response.status === 403) {
+        rateLimited = true;
+        return null;
+      }
+      if (!response.ok) return null;
+      return parsePcsxDescription(await response.json());
+    } catch {
+      return null;
+    }
+  }
+
   // Page one decides whether this run is trustworthy at all. Both failures
   // below used to `return []`, which runProvider reports as "no openings" —
   // so the throttle this provider already detects (the 429/403 cooldown
@@ -179,14 +239,14 @@ export async function fetchLatestMicrosoftJobs(options: { maxJobs?: number } = {
   if (firstPage === null) {
     throw new Error(
       rateLimited
-        ? "Microsoft PCSX search is rate limited"
-        : "Microsoft PCSX search page one could not be read",
+        ? `${board.company} PCSX search is rate limited`
+        : `${board.company} PCSX search page one could not be read`,
     );
   }
 
   const parsed = parsePcsxPositions(firstPage, board.boardUrl);
   if (parsed.length === 0) {
-    throw new Error("Microsoft PCSX search page one carried no positions");
+    throw new Error(`${board.company} PCSX search page one carried no positions`);
   }
 
   const total = Math.min(parsePcsxCount(firstPage) || parsed.length, maxJobs);
@@ -203,8 +263,33 @@ export async function fetchLatestMicrosoftJobs(options: { maxJobs?: number } = {
     async (start) => parsePcsxPositions(await readPage(start), board.boardUrl),
   );
 
-  return [...parsed, ...rest.flat()]
+  const listed = [...parsed, ...rest.flat()]
     .slice(0, maxJobs)
+    .filter((job) => !excluded?.test(job.title));
+
+  // Search rows carry no description, so without this every posting read
+  // "Not Stated" for experience. Details are best-effort: past the deadline or
+  // after a throttle the remaining rows keep their list-level text.
+  const descriptions = new Map<string, string>();
+  await mapWithinDeadline(
+    listed.slice(0, board.maxDetails ?? 200),
+    detailConcurrency,
+    startedAt,
+    runDeadlineMs,
+    async (job) => {
+      if (rateLimited) return;
+      const positionId = job.absoluteUrl.match(/\/job\/(\d+)/u)?.[1];
+      if (!positionId) return;
+      const detail = await readDetail(positionId);
+      if (detail) descriptions.set(job.id, detail);
+    },
+  );
+
+  return listed
+    .map((job) => ({
+      ...job,
+      contentText: descriptions.get(job.id) ?? job.contentText,
+    }))
     .map((job) => ({
       ...job,
       company: board.company,

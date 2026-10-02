@@ -5,6 +5,17 @@
     "source": "official-careers-page,eightfold-pcsx-api",
     "boardUrl": "https://apply.careers.microsoft.com/careers",
     "apiUrl": "https://apply.careers.microsoft.com/api/pcsx/search?domain=microsoft.com&location=United%20States&sort_by=timestamp",
-    "lastVerifiedJobCount": 1107
+    "lastVerifiedJobCount": 1107,
+    "maxDetails": 120
+  },
+  {
+    "company": "Starbucks",
+    "token": "starbucks-pcsx",
+    "source": "official-careers-page,eightfold-pcsx-api",
+    "boardUrl": "https://apply.starbucks.com/careers",
+    "apiUrl": "https://apply.starbucks.com/api/pcsx/search?domain=starbucks.com&location=Seattle%2C%20Washington%2C%20United%20States&sort_by=timestamp",
+    "lastVerifiedJobCount": 403,
+    "excludeTitlePattern": "store\\s*#|^barista\\b|^shift (supervisor|manager)\\b",
+    "maxJobs": 450
   }
 ]

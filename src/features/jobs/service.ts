@@ -12,7 +12,7 @@ import {
 import { fetchLatestLeverJobs, leverBoards } from "./providers/lever";
 import { fetchLatestWorkdayJobs, workdayBoards } from "./providers/workday";
 import { expediaBoards, fetchLatestExpediaJobs } from "./providers/expedia";
-import { fetchLatestMicrosoftJobs, microsoftBoards } from "./providers/microsoft";
+import { fetchLatestPcsxJobs, microsoftBoards } from "./providers/microsoft";
 import { appleBoards, fetchLatestAppleJobs } from "./providers/apple";
 import { fetchLatestMetaJobs, metaBoards } from "./providers/meta";
 import {
@@ -199,11 +199,13 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
       timeoutMs: 50_000,
       run: () => fetchLatestExpediaJobs(),
     },
-    {
-      provider: "microsoft",
+    // One run per Eightfold site, so a throttled Microsoft never takes
+    // Starbucks down with it.
+    ...microsoftBoards.map((board) => ({
+      provider: board.company.toLowerCase(),
       timeoutMs: 35_000,
-      run: () => fetchLatestMicrosoftJobs(),
-    },
+      run: () => fetchLatestPcsxJobs(board),
+    })),
     {
       provider: "apple",
       timeoutMs: 50_000,

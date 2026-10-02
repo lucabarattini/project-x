@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatPcsxLocation, parsePcsxCount, parsePcsxPositions } from "./microsoft";
+import {
+  formatPcsxLocation,
+  parsePcsxCount,
+  parsePcsxDescription,
+  parsePcsxPositions,
+} from "./microsoft";
 
 const siteBaseUrl = "https://apply.careers.microsoft.com/careers";
 
@@ -123,4 +128,14 @@ test("parsePcsxCount reports how many offsets the fan-out should schedule", () =
   assert.equal(parsePcsxCount({ data: { count: 0 } }), 0);
   assert.equal(parsePcsxCount({ data: {} }), 0);
   assert.equal(parsePcsxCount(null), 0);
+});
+
+test("parsePcsxDescription keeps the experience line of a position's description", () => {
+  const text = parsePcsxDescription({
+    data: { jobDescription: "<p>We&rsquo;d love to hear from people with:</p><ul><li>5+ years of experience in data analytics</li></ul>" },
+  });
+  assert.match(text ?? "", /5\+ years of experience in data analytics/u);
+  assert.match(text ?? "", /We'd love/u);
+  assert.equal(parsePcsxDescription({ data: {} }), null);
+  assert.equal(parsePcsxDescription(null), null);
 });
