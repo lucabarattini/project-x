@@ -6,5 +6,61 @@
     "boardUrl": "https://jobs.lever.co/tgsmc",
     "apiUrl": "https://api.lever.co/v0/postings/tgsmc?mode=json",
     "lastVerifiedJobCount": 0
+  },
+  {
+    "company": "CopilotKit",
+    "token": "copilotkit",
+    "source": "startup-list,internet-probe",
+    "boardUrl": "https://jobs.lever.co/copilotkit",
+    "apiUrl": "https://api.lever.co/v0/postings/copilotkit?mode=json",
+    "lastVerifiedJobCount": 1
+  },
+  {
+    "company": "Ansatz Capital",
+    "token": "ansatzcapital",
+    "source": "hedge-fund-tier-list,internet-probe",
+    "boardUrl": "https://jobs.lever.co/ansatzcapital",
+    "apiUrl": "https://api.lever.co/v0/postings/ansatzcapital?mode=json",
+    "lastVerifiedJobCount": 5
+  },
+  {
+    "company": "Belvedere Trading",
+    "token": "belvederetrading",
+    "source": "hedge-fund-tier-list,internet-probe",
+    "boardUrl": "https://jobs.lever.co/belvederetrading",
+    "apiUrl": "https://api.lever.co/v0/postings/belvederetrading?mode=json",
+    "lastVerifiedJobCount": 21
+  },
+  {
+    "company": "Valkyrie Trading",
+    "token": "valkyrietrading",
+    "source": "hedge-fund-tier-list,internet-probe",
+    "boardUrl": "https://jobs.lever.co/valkyrietrading",
+    "apiUrl": "https://api.lever.co/v0/postings/valkyrietrading?mode=json",
+    "lastVerifiedJobCount": 6
+  },
+  {
+    "company": "Brooks Running",
+    "token": "brooksrunning",
+    "source": "washington-hiring,internet-probe",
+    "boardUrl": "https://jobs.lever.co/brooksrunning",
+    "apiUrl": "https://api.lever.co/v0/postings/brooksrunning?mode=json",
+    "lastVerifiedJobCount": 32
+  },
+  {
+    "company": "Rover",
+    "token": "rover",
+    "source": "washington-hiring,internet-probe",
+    "boardUrl": "https://jobs.lever.co/rover",
+    "apiUrl": "https://api.lever.co/v0/postings/rover?mode=json",
+    "lastVerifiedJobCount": 36
+  },
+  {
+    "company": "Outreach",
+    "token": "outreach",
+    "source": "washington-hiring,internet-probe",
+    "boardUrl": "https://jobs.lever.co/outreach",
+    "apiUrl": "https://api.lever.co/v0/postings/outreach?mode=json",
+    "lastVerifiedJobCount": 28
   }
 ]
