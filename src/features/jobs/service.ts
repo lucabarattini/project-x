@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { after } from "next/server";
 import { compactExperienceEvidence } from "./display";
 import { amazonBoards, fetchLatestAmazonJobs } from "./providers/amazon";
 import { ashbyBoards, fetchLatestAshbyJobs } from "./providers/ashby";
@@ -250,24 +251,33 @@ type ChunkValue = {
  * Fetches and normalizes the full snapshot. Expensive (all providers), so it
  * runs at most once per process and is persisted as small chunks below.
  */
+/**
+ * The same opening under several requisition ids: Apple posts "CPU
+ * Implementation Engineer, Austin" eight times, Amazon a data-center role six.
+ * On the board they are one row each, so one company + title + location is
+ * one job.
+ */
+function postingKey(job: { company: string; title: string; location: string }) {
+  return `posting:${job.company}|${job.title.trim().toLowerCase()}|${job.location}`;
+}
+
 async function buildSnapshotInternal(): Promise<JobSnapshot> {
   const results = await Promise.all(buildProviders({}).map(runProvider));
 
   const seen = new Set<string>();
   const jobs = results
     .flatMap((result) => result.jobs)
-    .filter((job) => {
-      const key = `${job.boardToken}:${job.id}`;
-      const fallbackKey = `url:${job.absoluteUrl}`;
-      if (seen.has(key) || seen.has(fallbackKey)) return false;
-      seen.add(key);
-      seen.add(fallbackKey);
-      return true;
-    })
     .sort((a, b) => {
       const left = a.postedAt ? Date.parse(a.postedAt) : 0;
       const right = b.postedAt ? Date.parse(b.postedAt) : 0;
       return right - left;
+    })
+    // Newest first, so the copy kept is the latest one.
+    .filter((job) => {
+      const keys = [`${job.boardToken}:${job.id}`, `url:${job.absoluteUrl}`, postingKey(job)];
+      if (keys.some((key) => seen.has(key))) return false;
+      for (const key of keys) seen.add(key);
+      return true;
     })
     .map((job) => ({
       ...job,
@@ -449,8 +459,18 @@ async function readCachedSnapshot(): Promise<JobSnapshot | null> {
         )
       : [];
     lastGoodEntryCount = Math.max(lastGoodEntryCount, first.jobCount);
+    // A chunk missing from the cache is rebuilt from a fresh fetch, whose rows
+    // sit at different offsets than chunk 0's: without this the seam showed
+    // the same posting twice in a row.
+    const seen = new Set<string>();
+    const entries = [...first.items, ...rest.flatMap((chunk) => chunk.items)].filter((entry) => {
+      const key = postingKey(entry.job);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     return {
-      entries: [...first.items, ...rest.flatMap((chunk) => chunk.items)],
+      entries,
       fetchedAt: first.fetchedAt,
       diagnostics: first.diagnostics,
     };
@@ -476,7 +496,15 @@ export async function getSnapshot(): Promise<JobSnapshot> {
   const stale = !cached || isStaleBeyondLimit(cached.fetchedAt);
   const retryable = Date.now() - unusableRebuildAt >= rebuildRetryCooldownMs;
   if (stale && retryable) {
-    return rebuildSnapshot(cached);
+    if (!cached) {
+      return rebuildSnapshot(null);
+    }
+    // Blocking here made the first visit of every idle stretch wait out the
+    // whole ~45 s fan-out. The stale board is served at once and rebuilt
+    // after the response, so the visit after that one is fresh.
+    refreshAfterResponse(cached);
+    moduleSnapshot = cached;
+    return cached;
   }
 
   if (cached) {
@@ -489,6 +517,16 @@ export async function getSnapshot(): Promise<JobSnapshot> {
     return moduleSnapshot;
   }
   return rebuildSnapshot(null);
+}
+
+function refreshAfterResponse(fallback: JobSnapshot) {
+  const refresh = () => rebuildSnapshot(fallback).then(() => undefined, () => undefined);
+  try {
+    after(refresh);
+  } catch {
+    // Outside a request (the startup warm-up) there is no response to wait for.
+    void refresh();
+  }
 }
 
 /**
