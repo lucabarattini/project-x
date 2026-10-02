@@ -91,8 +91,14 @@ export function formatAppleLocation(locations: AppleLocation[] | undefined) {
 const appleRetailStoreTitle =
   /^\s*US\s*[-–—]\s*(?:(?:senior|sr\.?)\s+)?(?:technical\s+(?:specialist|expert)|operations\s+(?:expert|specialist|lead(?:er)?)|business\s+(?:pro|expert)|creative\s+pro|(?:store|market)\s+lead(?:er)?|specialist|expert|genius|creative|manager|lead(?:er)?)\s*(?=$|[:,(])/iu;
 
+// Apple staff placed inside partner stores (Best Buy and the like) carry no
+// "US-" prefix but a ", Channel Retail" suffix. Only the floor titles match;
+// a corporate "Account Manager, Channel Retail" would survive.
+const appleChannelRetailTitle =
+  /^\s*(?:seasonal\s+)?(?:advisor|(?:community\s+)?specialist)\s*,\s*channel\s+retail\s*$/iu;
+
 export function isAppleRetailStoreTitle(title: string) {
-  return appleRetailStoreTitle.test(title);
+  return appleRetailStoreTitle.test(title) || appleChannelRetailTitle.test(title);
 }
 
 /**

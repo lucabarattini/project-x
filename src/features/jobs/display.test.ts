@@ -142,6 +142,16 @@ test("test and QA engineers are technical and hidden from the non-technical feed
   }
 });
 
+test("assistant roles are kept out of the non-technical families", () => {
+  for (const title of [
+    "Administrative Assistant - ASE Operations Admin Team, Apple Services Engineering",
+    "Executive Assistant, AWS Agentic AI",
+    "Executive Business Partner, Ads",
+  ]) {
+    assert.equal(classifyNonTechnicalRole(title), "Other", `"${title}" must be hidden from non-tech`);
+  }
+});
+
 test("accountants and analysts belong to non-tech, test engineers to technical", () => {
   assert.equal(classifyTechnicalRole("Fixed Asset Accountant").matchedCategory, "Non-Technical");
   assert.equal(classifyTechnicalRole("Category Analyst, Category Analytics").matchedCategory, "Non-Technical");

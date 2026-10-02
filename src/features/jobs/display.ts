@@ -852,6 +852,8 @@ const excludedNonTechnicalPatterns = [
   /\bQA engineer\b/iu,
   /\bSDET\b/iu,
   /\bquality assurance\b/iu,
+  /\b(executive|administrative|admin) assistant\b/iu,
+  /\bexecutive business partner\b/iu,
 ];
 
 /**

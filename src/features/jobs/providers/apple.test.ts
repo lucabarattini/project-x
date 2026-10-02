@@ -109,6 +109,8 @@ test("parseAppleHydrationData drops Apple Store retail postings before they beco
     "US-Manager",
     "US-Senior Manager",
     "US-Lead",
+    "Seasonal Advisor, Channel Retail",
+    "Community Specialist, Channel Retail",
   ];
   for (const title of retailTitles) {
     assert.equal(isAppleRetailStoreTitle(title), true, `expected "${title}" to be a retail posting`);
@@ -131,6 +133,7 @@ test("the Apple retail rule reads the prefix and the whole title, not one word",
     "US - Lead Software Engineer",
     "US - Senior Software Engineer",
     "US-Data Scientist",
+    "Account Manager, Channel Retail",
   ]) {
     assert.equal(isAppleRetailStoreTitle(title), false, `expected "${title}" to survive`);
   }
