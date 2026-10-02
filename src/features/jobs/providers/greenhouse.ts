@@ -71,7 +71,13 @@ export function resolveGreenhouseJobUrl(
 }
 
 function stripHtml(html = "") {
+  // `content=true` board lists return the description entity-escaped
+  // ("&lt;h2&gt;Minimum requirements&lt;/h2&gt;"). Unescaping the tags first
+  // lets the block breaks below survive; without it the section headings ran
+  // together and every minimum read as a preferred qualification.
   return html
+    .replace(/&lt;/giu, "<")
+    .replace(/&gt;/giu, ">")
     .replace(/<script[\s\S]*?<\/script>/giu, " ")
     .replace(/<style[\s\S]*?<\/style>/giu, " ")
     .replace(/<li[^>]*>/giu, " - ")
@@ -175,8 +181,11 @@ export async function fetchLatestGreenhouseJobs(
   const results = await mapWithConcurrency(greenhouseBoards, boardConcurrency, async (board) => {
     try {
       const response = await fetch(board.apiUrl, {
-        next: { revalidate: 300 },
-        signal: AbortSignal.timeout(5_000),
+        // With `content=true` a large board (Stripe, Anthropic) is 5-9 MB,
+        // past the 2 MB the Next.js fetch cache will store; the snapshot is
+        // what gets cached, so the raw list is not.
+        cache: "no-store",
+        signal: AbortSignal.timeout(10_000),
       });
 
       if (!response.ok) {
@@ -208,12 +217,19 @@ export async function fetchLatestGreenhouseJobs(
   });
 
   const latestJobs = typeof limit === "number" ? sortedJobs.slice(0, limit) : sortedJobs;
-  const resolvedDetailLimit = Math.min(latestJobs.length, detailLimit);
+
+  // Board lists are fetched with `content=true`, so nearly every posting
+  // already carries its description. Only the ones that came back empty need
+  // the per-job embed page; spending the detail budget on the newest postings
+  // regardless left everything past the first ~120 with no experience line.
+  const missingContent = latestJobs.filter((job) => !job.contentText);
+  const withContent = latestJobs.filter((job) => job.contentText);
+  const resolvedDetailLimit = Math.min(missingContent.length, detailLimit);
   const detailedJobs = await fetchJobDetailsWithinDeadline(
-    latestJobs.slice(0, resolvedDetailLimit),
+    missingContent.slice(0, resolvedDetailLimit),
     startedAt,
     runDeadlineMs,
   );
 
-  return [...detailedJobs, ...latestJobs.slice(resolvedDetailLimit)];
+  return [...withContent, ...detailedJobs, ...missingContent.slice(resolvedDetailLimit)];
 }

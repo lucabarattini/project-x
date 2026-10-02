@@ -404,7 +404,10 @@ function normalizeWhitespace(value: string) {
 
 function sentenceCaseSections(text: string) {
   const normalized = text.replace(/[–—]/gu, "-").replace(/\r?\n/gu, " ");
-  const preferredIndex = normalized.search(/\bpreferred qualifications?\b|\bnice to have\b|\bpreferred experience\b/iu);
+  // A heading, not prose about it: Stripe opens every "Who you are" block with
+  // "The preferred qualifications are a bonus, not a requirement." above its
+  // minimums, and splitting there filed every minimum as preferred.
+  const preferredIndex = normalized.search(/\bpreferred qualifications?\b(?!\s+(?:are|is)\b)|\bnice to have\b|\bpreferred experience\b/iu);
   const requiredPart = preferredIndex >= 0 ? normalized.slice(0, preferredIndex) : normalized;
   const preferredPart = preferredIndex >= 0 ? normalized.slice(preferredIndex) : "";
 

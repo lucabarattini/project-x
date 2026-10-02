@@ -405,3 +405,11 @@ test("widening the security rule does not swallow genuinely non-technical analys
     "Analytics & Business Intelligence",
   );
 });
+
+test("extractExperienceRequirement ignores prose about preferred qualifications above the minimums", () => {
+  const requirement = extractExperienceRequirement(
+    "Who you are We're looking for someone who meets the minimum requirements. The preferred qualifications are a bonus, not a requirement. Minimum requirements 2+ years of experience in finance. Preferred qualifications 5+ years of experience in payments.",
+  );
+  assert.equal(requirement.status, "explicit");
+  assert.equal(requirement.effectiveMinYears, 2);
+});
