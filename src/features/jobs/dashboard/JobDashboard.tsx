@@ -378,7 +378,7 @@ export function JobDashboard({
     { label: experienceLabel },
     { label: roleTypeLabel },
     ...params.locations.map((location) => ({
-      label: location,
+      label: locationFilters.find((filter) => filter.value === location)?.label ?? location,
       onClear: () => toggleLocation(location),
     })),
     ...(params.company ? [{ label: params.company, onClear: () => updateParams({ company: null }) }] : []),
