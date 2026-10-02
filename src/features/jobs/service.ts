@@ -377,67 +377,100 @@ const rebuildRetryCooldownMs = 2 * 60 * 1000;
 
 let snapshotBuild: Promise<JobSnapshot> | null = null;
 
+/**
+ * The last builds this instance made, by fetchedAt. A chunk is only ever cut
+ * from the snapshot its key names: cutting it from whatever build happened to
+ * be running mixed two fetches, which showed up as duplicated rows.
+ */
+const builtSnapshots = new Map<string, JobSnapshot>();
+
 function ensureSnapshotBuild(): Promise<JobSnapshot> {
   if (!snapshotBuild) {
-    snapshotBuild = buildVerifiedSnapshot().finally(() => {
-      snapshotBuild = null;
-    });
+    snapshotBuild = buildVerifiedSnapshot()
+      .then((snapshot) => {
+        builtSnapshots.set(snapshot.fetchedAt, snapshot);
+        for (const fetchedAt of builtSnapshots.keys()) {
+          if (builtSnapshots.size <= 2) break;
+          builtSnapshots.delete(fetchedAt);
+        }
+        return snapshot;
+      })
+      .finally(() => {
+        snapshotBuild = null;
+      });
   }
   return snapshotBuild;
 }
 
+function chunkOf(snapshot: JobSnapshot, index: number): ChunkValue {
+  const start = index * snapshotChunkSize;
+  return {
+    items: snapshot.entries.slice(start, start + snapshotChunkSize),
+    fetchedAt: snapshot.fetchedAt,
+    jobCount: snapshot.entries.length,
+    diagnostics: snapshot.diagnostics,
+  };
+}
+
+function writeLaterChunks(snapshot: JobSnapshot) {
+  const chunkCount = Math.ceil(snapshot.entries.length / snapshotChunkSize);
+  return Promise.all(
+    Array.from({ length: chunkCount - 1 }, (_, index) =>
+      getSnapshotChunk(`${index + 1}:${snapshot.fetchedAt}`),
+    ),
+  );
+}
+
 /**
- * One slice of the snapshot, persisted in the Next.js data cache for 300 s.
- * Chunk 0 has a fixed key and carries the snapshot metadata; every later
- * chunk is keyed by the snapshot's fetchedAt so a rebuild never mixes data
- * from two different fetches.
+ * One slice of the snapshot in the Next.js data cache. Chunk 0 has a fixed
+ * key and points at the current snapshot; every later chunk is keyed by that
+ * snapshot's fetchedAt.
+ *
+ * Chunk 0 used to be refreshed on its own: its background revalidation built
+ * a new snapshot but stored only slice 0, so the next reader found no chunks
+ * for the fetchedAt it named and rebuilt the whole board inline (~70 s on a
+ * fresh Vercel instance). Now the rest of a snapshot is written before chunk
+ * 0 points at it, and a later chunk never starts a build of its own.
  */
 const getSnapshotChunk = unstable_cache(
-  // The key is "index" for chunk 0 and "index:fetchedAt" for every later
-  // chunk, so a rebuild never mixes chunks from two different fetches.
   async (key: string): Promise<ChunkValue> => {
-    const snapshot = await ensureSnapshotBuild();
     const separator = key.indexOf(":");
-    const index = separator >= 0 ? Number(key.slice(0, separator)) : Number(key);
-    const start = index * snapshotChunkSize;
-    return {
-      items: snapshot.entries.slice(start, start + snapshotChunkSize),
-      fetchedAt: snapshot.fetchedAt,
-      jobCount: snapshot.entries.length,
-      diagnostics: snapshot.diagnostics,
-    };
+    if (separator < 0) {
+      const newest = [...builtSnapshots.values()].at(-1);
+      const snapshot = newest && !isStaleBeyondTtl(newest.fetchedAt)
+        ? newest
+        : await ensureSnapshotBuild();
+      await writeLaterChunks(snapshot);
+      return chunkOf(snapshot, 0);
+    }
+    const snapshot = builtSnapshots.get(key.slice(separator + 1));
+    if (!snapshot) {
+      throw new Error(`Snapshot chunk ${key} is not on this instance`);
+    }
+    return chunkOf(snapshot, Number(key.slice(0, separator)));
   },
-  ["job-snapshot-chunk-v14"],
+  ["job-snapshot-chunk-v15"],
   { revalidate: snapshotRevalidateSeconds },
 );
+
+function isStaleBeyondTtl(fetchedAt: string) {
+  return Date.now() - Date.parse(fetchedAt) >= snapshotTtlMs;
+}
 
 let moduleSnapshot: JobSnapshot | null = null;
 
 /**
- * Builds a fresh snapshot, then writes it into the persisted chunk cache.
- * Concurrent callers share the same in-flight build.
+ * Builds a fresh snapshot and writes its later chunks; chunk 0 moves to it on
+ * its next revalidation, which reuses this build instead of starting another.
  */
 async function buildAndCache(): Promise<JobSnapshot> {
-  if (!snapshotBuild) {
-    snapshotBuild = (async () => {
-      const snapshot = await buildVerifiedSnapshot();
-      try {
-        const chunkCount = Math.ceil(snapshot.entries.length / snapshotChunkSize);
-        await Promise.all([
-          getSnapshotChunk("0"),
-          ...Array.from({ length: chunkCount - 1 }, (_, index) =>
-            getSnapshotChunk(`${index + 1}:${snapshot.fetchedAt}`),
-          ),
-        ]);
-      } catch {
-        // Cache warming is best-effort; the module snapshot is still served.
-      }
-      return snapshot;
-    })().finally(() => {
-      snapshotBuild = null;
-    });
+  const snapshot = await ensureSnapshotBuild();
+  try {
+    await writeLaterChunks(snapshot);
+  } catch {
+    // Cache warming is best-effort; the module snapshot is still served.
   }
-  return snapshotBuild;
+  return snapshot;
 }
 
 /**
@@ -474,8 +507,7 @@ async function readCachedSnapshot(): Promise<JobSnapshot | null> {
       fetchedAt: first.fetchedAt,
       diagnostics: first.diagnostics,
     };
-  } catch (error) {
-    console.log(`[snapshot-debug] read failed: ${error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 400) : String(error)}`);
+  } catch {
     return null;
   }
 }
@@ -485,9 +517,7 @@ export async function getSnapshot(): Promise<JobSnapshot> {
     return moduleSnapshot;
   }
 
-  const readStartedAt = Date.now();
   const cached = await readCachedSnapshot();
-  console.log(`[snapshot-debug] read ${Date.now() - readStartedAt}ms cached=${cached?.fetchedAt ?? "none"} entries=${cached?.entries.length ?? 0} module=${moduleSnapshot?.fetchedAt ?? "none"}`);
 
   // Stale-while-revalidate may hand back an entry far older than the TTL, and
   // a personal site is idle for most of the day — so this branch, not the
