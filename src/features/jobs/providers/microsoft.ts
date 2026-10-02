@@ -10,8 +10,6 @@ import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
  */
 export type PcsxBoard = GreenhouseBoard & {
   excludeTitlePattern?: string;
-  maxJobs?: number;
-  maxDetails?: number;
 };
 
 export const microsoftBoards = boards as PcsxBoard[];
@@ -165,7 +163,9 @@ export function parsePcsxCount(json: unknown): number {
  * and stopping at the first 429 keeps the next run's budget intact.
  */
 export async function fetchLatestPcsxJobs(board: PcsxBoard) {
-  const maxJobs = board.maxJobs ?? 600;
+  const maxJobs = 600;
+  // Each detail is one more request against Microsoft's per-IP throttle.
+  const maxDetails = 120;
   const excluded = board.excludeTitlePattern
     ? new RegExp(board.excludeTitlePattern, "iu")
     : null;
@@ -272,7 +272,7 @@ export async function fetchLatestPcsxJobs(board: PcsxBoard) {
   // after a throttle the remaining rows keep their list-level text.
   const descriptions = new Map<string, string>();
   await mapWithinDeadline(
-    listed.slice(0, board.maxDetails ?? 200),
+    listed.slice(0, maxDetails),
     detailConcurrency,
     startedAt,
     runDeadlineMs,
