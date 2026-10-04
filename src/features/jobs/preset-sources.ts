@@ -104,15 +104,17 @@ async function readAppleQualifications(absoluteUrl: string) {
   }
 }
 
-async function resolveAppleSearch(url: string): Promise<GreenhouseJob[]> {
+async function resolveAppleSearch(url: string): Promise<{ jobs: GreenhouseJob[]; complete: boolean }> {
   const startedAt = Date.now();
+  let failedPages = 0;
   const readPage = async (page: number) => {
     const response = await fetch(`${url}&page=${page}`, {
       next: { revalidate: 600 },
       signal: AbortSignal.timeout(12_000),
       headers: appleHeaders,
-    });
-    return response.ok ? response.text() : "";
+    }).catch(() => null);
+    if (!response?.ok) failedPages += 1;
+    return response?.ok ? response.text() : "";
   };
 
   const first = await readPage(1);
@@ -144,20 +146,41 @@ async function resolveAppleSearch(url: string): Promise<GreenhouseJob[]> {
     }
   }
 
-  return jobs.map((job) => ({
-    ...job,
-    contentText: appleQualifications.get(job.id) ?? job.contentText,
-    company: "Apple",
-    boardToken: "apple-jobs",
-    updatedAt: null,
-  }));
+  return {
+    complete: failedPages === 0 && rest.length === pageCount - 1,
+    jobs: jobs.map((job) => ({
+      ...job,
+      contentText: appleQualifications.get(job.id) ?? job.contentText,
+      company: "Apple",
+      boardToken: "apple-jobs",
+      updatedAt: null,
+    })),
+  };
 }
 
+type PresetResult = { ids: Set<string> } | { jobs: GreenhouseJob[] };
+
+/**
+ * Complete results are kept for 10 minutes, so a click does not re-read 28
+ * Apple pages from a datacenter IP that Apple partly refuses. A result with a
+ * page missing is served but not kept, so the next click retries it.
+ */
+const presetResults = new Map<string, { at: number; result: PresetResult }>();
+
 /** What a preset's search returns on its own site: posting ids, or whole rows. */
-export async function resolvePreset(
-  preset: SearchPreset,
-): Promise<{ ids: Set<string> } | { jobs: GreenhouseJob[] }> {
-  return preset.site === "apple"
-    ? { jobs: await resolveAppleSearch(preset.url) }
-    : { ids: await resolveStripeSearch(preset.url) };
+export async function resolvePreset(preset: SearchPreset): Promise<PresetResult> {
+  const kept = presetResults.get(preset.id);
+  if (kept && Date.now() - kept.at < 10 * 60 * 1000) {
+    return "jobs" in kept.result
+      ? { jobs: kept.result.jobs.map((job) => ({ ...job, contentText: appleQualifications.get(String(job.id)) ?? job.contentText })) }
+      : kept.result;
+  }
+  if (preset.site === "stripe") {
+    const result = { ids: await resolveStripeSearch(preset.url) };
+    presetResults.set(preset.id, { at: Date.now(), result });
+    return result;
+  }
+  const { jobs, complete } = await resolveAppleSearch(preset.url);
+  if (complete) presetResults.set(preset.id, { at: Date.now(), result: { jobs } });
+  return { jobs };
 }
