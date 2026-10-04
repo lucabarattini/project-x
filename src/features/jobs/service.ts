@@ -2,7 +2,8 @@ import { unstable_cache } from "next/cache";
 import { after } from "next/server";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { get, put } from "@vercel/blob";
-import { findPreset, resolvePreset } from "./presets";
+import { findPreset } from "./presets";
+import { resolvePreset } from "./preset-sources";
 import { compactExperienceEvidence } from "./display";
 import { amazonBoards, fetchLatestAmazonJobs } from "./providers/amazon";
 import { ashbyBoards, fetchLatestAshbyJobs } from "./providers/ashby";
@@ -528,9 +529,15 @@ export async function getSearchEntries(
   if (!preset) {
     return getAugmentedEntries(snapshot, params.q);
   }
-  const ids = await resolvePreset(preset).catch(() => new Set<string>());
+  const result = await resolvePreset(preset).catch(() => ({ ids: new Set<string>() }));
+  if ("jobs" in result) {
+    const byId = new Map(result.jobs.map((job) => [String(job.id), job]));
+    return [...byId.values()].map((job) =>
+      buildSearchEntry({ ...job, contentText: compactExperienceEvidence(job.contentText) }),
+    );
+  }
   return snapshot.entries.filter(
-    (entry) => entry.job.company === preset.company && ids.has(String(entry.job.id)),
+    (entry) => entry.job.company === preset.company && result.ids.has(String(entry.job.id)),
   );
 }
 
