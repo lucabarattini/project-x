@@ -1,0 +1,18 @@
+# Opens the live site once an hour so its job snapshot is rebuilt even when
+# nobody visits: the server serves the stored board at once and rebuilds it
+# after responding, so without traffic the first visit of the day saw postings
+# hours old. Hourly keeps Blob well inside the Hobby plan's monthly limits.
+name: Refresh job snapshot
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Request the board
+        run: curl --fail --silent --show-error --max-time 120 --output /dev/null "https://project-x-tan-rho.vercel.app/api/jobs/search?limit=1"

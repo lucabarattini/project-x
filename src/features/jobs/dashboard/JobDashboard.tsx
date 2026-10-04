@@ -127,14 +127,20 @@ function SectionCard({ children, className = "" }: { children: ReactNode; classN
  * request is the live one, and a slower earlier response can be dropped
  * without tracking request ids by hand.
  */
+/** Older than the server's own refresh interval on Vercel (30 min). */
+const staleBoardMs = 30 * 60 * 1000;
+
 function isCurrentUrl(url: string) {
   return `${window.location.pathname}${window.location.search}` === url;
 }
 
-/** Fetches the whole board as compact rows, so filters can run in the browser. */
-async function loadSearchIndex(): Promise<JobSearchEntry[] | null> {
+/**
+ * Fetches the whole board as compact rows, so filters can run in the browser.
+ * `version` (a snapshot's fetchedAt) gets past the CDN's copy of an older one.
+ */
+async function loadSearchIndex(version?: string): Promise<JobSearchEntry[] | null> {
   try {
-    const response = await fetch("/api/jobs/index");
+    const response = await fetch(version ? `/api/jobs/index?v=${encodeURIComponent(version)}` : "/api/jobs/index");
     if (!response.ok) return null;
     const data = await response.json() as { rows: IndexRow[] };
     return data.rows.map(fromIndexRow);
@@ -170,6 +176,11 @@ export function JobDashboard({
   // keyword searches (which also read descriptions and live Amazon hits on the
   // server), each change is a request to /api/jobs/search.
   const [searchIndex, setSearchIndex] = useState<JobSearchEntry[] | null>(null);
+  // A newer snapshot noticed by polling, before the page's own props catch up.
+  const [polledFetchedAt, setPolledFetchedAt] = useState<string | null>(null);
+  const shownFetchedAt = polledFetchedAt && Date.parse(polledFetchedAt) > Date.parse(snapshotFetchedAt)
+    ? polledFetchedAt
+    : snapshotFetchedAt;
 
   /**
    * Applies a filter change without leaving the page.
@@ -241,19 +252,45 @@ export function JobDashboard({
   // Refreshes the current URL search state every five minutes. The server
   // snapshot itself only expires through the 300-second data cache.
   useEffect(() => {
-    const refreshIndex = () => {
-      void loadSearchIndex().then((entries) => {
-        if (entries) setSearchIndex(entries);
-      });
-    };
-    refreshIndex();
+    void loadSearchIndex().then((entries) => {
+      if (entries) setSearchIndex(entries);
+    });
     const interval = window.setInterval(() => {
       setLastCheckedAt(new Date());
       router.refresh();
-      refreshIndex();
+      void loadSearchIndex().then((entries) => {
+        if (entries) setSearchIndex(entries);
+      });
     }, 5 * 60 * 1000);
     return () => window.clearInterval(interval);
   }, [router]);
+
+  // A visit after an idle stretch is served the last stored board at once
+  // while a fresh one is built after the response (~1-2 min). Watch for it
+  // and swap it in here, rather than leaving hours-old postings on screen
+  // until a manual reload.
+  useEffect(() => {
+    if (Date.now() - Date.parse(snapshotFetchedAt) < staleBoardMs) return;
+    let attempts = 0;
+    const interval = window.setInterval(() => {
+      attempts += 1;
+      if (attempts > 12) window.clearInterval(interval);
+      void fetch("/api/jobs/search?limit=1")
+        .then((response) => response.json() as Promise<{ fetchedAt: string }>)
+        .then(({ fetchedAt }) => {
+          if (Date.parse(fetchedAt) <= Date.parse(snapshotFetchedAt)) return;
+          window.clearInterval(interval);
+          setPolledFetchedAt(fetchedAt);
+          setLastCheckedAt(new Date());
+          router.refresh();
+          void loadSearchIndex(fetchedAt).then((entries) => {
+            if (entries) setSearchIndex(entries);
+          });
+        })
+        .catch(() => undefined);
+    }, 20_000);
+    return () => window.clearInterval(interval);
+  }, [router, snapshotFetchedAt]);
 
   // Debounced keyword search, pushed into the URL so it stays shareable.
   useEffect(() => {
@@ -406,12 +443,10 @@ export function JobDashboard({
   ));
   const emptyProviders = diagnostics.filter((diagnostic) => diagnostic.status === "empty");
 
-  // The server rebuilds any snapshot older than half an hour before rendering,
-  // so one that reaches the page still carrying that age is a deliberate
-  // fallback: the rebuild was refused and the last real board is being shown
-  // instead. Say so plainly rather than passing hours-old postings off as live.
-  const servedFromFallback =
-    lastCheckedAt.getTime() - Date.parse(snapshotFetchedAt) > 30 * 60 * 1000;
+  // An old board on screen is either the stored one served while a fresh
+  // build runs (the effect above swaps it in), or the fallback kept because
+  // a rebuild was refused. Either way, say how old it is.
+  const servedFromFallback = lastCheckedAt.getTime() - Date.parse(shownFetchedAt) > staleBoardMs;
 
   const effectiveCountryLabel =
     params.locations.length > 0 ? "All countries" : params.country === "us" ? "U.S. based" : "All countries";
@@ -929,11 +964,11 @@ export function JobDashboard({
               <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/15 px-4 py-3 text-xs font-semibold leading-5 text-amber-900 dark:text-amber-300">
                 <Icon name="alert-triangle" className="h-4 w-4 shrink-0" />
                 <span>
-                  Showing the last complete board, fetched {formatRelativeDate(snapshotFetchedAt, lastCheckedAt)}
+                  Showing the board fetched {formatRelativeDate(shownFetchedAt, lastCheckedAt)}
                   {providerWarnings.length > 0
                     ? ` — ${providerWarnings.length} source${providerWarnings.length === 1 ? "" : "s"} are refusing us right now`
-                    : " — the latest refresh could not be trusted"}
-                  . These roles were real when they were collected; a newer refresh will replace them automatically.
+                    : " — a fresh one is being collected"}
+                  . This page swaps it in on its own as soon as it is ready, usually within two minutes.
                 </span>
               </p>
             ) : null}
@@ -1064,7 +1099,7 @@ export function JobDashboard({
               <div className="flex flex-col items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:flex-row sm:gap-4">
                 <p>Last checked {formatJobDate(lastCheckedAt.toISOString())}</p>
                 <p className="hidden text-slate-300 sm:inline">·</p>
-                <p>Data fetched at {formatJobDate(snapshotFetchedAt)}</p>
+                <p>Data fetched at {formatJobDate(shownFetchedAt)}</p>
                 {providerWarnings.length > 0 ? (
                   <>
                     <p className="hidden text-slate-300 sm:inline">·</p>

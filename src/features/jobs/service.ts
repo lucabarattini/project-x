@@ -1,7 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { after } from "next/server";
 import { gunzipSync, gzipSync } from "node:zlib";
-import { get, put } from "@vercel/blob";
+import { get, head, put } from "@vercel/blob";
 import { findPreset } from "./presets";
 import { resolvePresets } from "./preset-sources";
 import { compactExperienceEvidence } from "./display";
@@ -94,7 +94,10 @@ type FetchJobsOptions = {
  * fan-out is the main rate-limit trigger).
  */
 const isServerless = process.env.VERCEL === "1";
-const snapshotRevalidateSeconds = isServerless ? 600 : 300;
+// 30 min on Vercel keeps rebuilds, each one Blob write, under the Hobby
+// plan's 2,000 writes a month (48 a day at most); past that Blob is shut off
+// for 30 days.
+const snapshotRevalidateSeconds = isServerless ? 1800 : 300;
 const greenhouseDetailLimit = isServerless ? 60 : 120;
 
 const snapshotTtlMs = snapshotRevalidateSeconds * 1000;
@@ -449,12 +452,19 @@ function refreshAfterResponse() {
   }
 }
 
-/** Another instance may have rebuilt already: adopt its snapshot when fresh, fan out to the providers only when not. */
+/**
+ * Another instance may have rebuilt already: adopt its snapshot when fresh,
+ * fan out to the providers only when not. head() reads only the metadata, so
+ * checking costs no download of the 2.7 MB snapshot (Hobby includes 10 GB).
+ */
 async function refreshSnapshot() {
-  const stored = await readStoredSnapshot();
-  if (stored && isFresh(stored)) {
-    moduleSnapshot = stored;
-    return;
+  const stored = await head(snapshotBlobPath).catch(() => null);
+  if (stored && stored.etag !== snapshotBlobEtag && Date.now() - stored.uploadedAt.getTime() < snapshotTtlMs) {
+    const snapshot = await readStoredSnapshot();
+    if (snapshot && isFresh(snapshot)) {
+      moduleSnapshot = snapshot;
+      return;
+    }
   }
   await rebuildSnapshot(moduleSnapshot);
 }
