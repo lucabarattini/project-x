@@ -1,9 +1,9 @@
 // Server-only: resolves a saved search against its careers site (see presets.ts).
 import { detailConcurrency, mapWithinDeadline, pageConcurrency } from "./providers/concurrency";
 import { parseAppleHydrationData, parseAppleTotalRecords } from "./providers/apple";
-import type { GreenhouseJob } from "./providers/greenhouse";
-import { after } from "next/server";
-import type { SearchPreset } from "./presets";
+import { compactExperienceEvidence } from "./display";
+import { searchPresets } from "./presets";
+import { buildSearchEntry, type JobSearchEntry } from "./search-model";
 
 type StripeIndex = {
   filters: {
@@ -62,25 +62,13 @@ async function resolveStripeSearch(url: string) {
   );
 }
 
-/**
- * Reads every page of a jobs.apple.com search (20 a page). Store-floor titles
- * are dropped by the same parser the Apple provider uses.
- */
 const appleHeaders = {
   accept: "text/html",
   "accept-language": "en-US,en;q=0.9",
   "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
 };
 
-/**
- * Apple's search rows carry no requirements; its detail page does, as
- * minimum/preferred qualifications. A posting's requirements never change, so
- * each is read once per instance and kept here, never in the Next.js fetch
- * cache (350 pages of ~190 kB).
- */
-const appleQualifications = new Map<string, string | null>();
-let appleQualificationFill: Promise<unknown> | null = null;
-
+/** Minimum/preferred qualifications from a posting's detail page; its search row has none. */
 async function readAppleQualifications(absoluteUrl: string) {
   try {
     const response = await fetch(absoluteUrl, {
@@ -104,83 +92,114 @@ async function readAppleQualifications(absoluteUrl: string) {
   }
 }
 
-async function resolveAppleSearch(url: string): Promise<{ jobs: GreenhouseJob[]; complete: boolean }> {
-  const startedAt = Date.now();
+/**
+ * Every page of a jobs.apple.com search (20 a page); store-floor titles are
+ * dropped by the parser the Apple provider uses. From a datacenter IP Apple
+ * refuses some pages and answers others with rows already seen, so a page
+ * that adds no new posting counts as failed, and the read as incomplete.
+ */
+async function readAppleSearch(url: string, startedAt: number) {
   let failedPages = 0;
   const readPage = async (page: number) => {
     const response = await fetch(`${url}&page=${page}`, {
-      next: { revalidate: 600 },
+      cache: "no-store",
       signal: AbortSignal.timeout(12_000),
       headers: appleHeaders,
     }).catch(() => null);
-    if (!response?.ok) failedPages += 1;
-    return response?.ok ? response.text() : "";
+    if (!response?.ok) {
+      failedPages += 1;
+      return "";
+    }
+    return response.text();
   };
 
   const first = await readPage(1);
   const pageCount = Math.ceil(parseAppleTotalRecords(first) / 20);
-  const rest = await mapWithinDeadline(
-    Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) => index + 2),
-    pageConcurrency,
-    startedAt,
-    25_000,
-    async (page) => parseAppleHydrationData(await readPage(page)),
-  );
-  const jobs = [...parseAppleHydrationData(first), ...rest.flat()];
+  const pages = [
+    parseAppleHydrationData(first),
+    ...(await mapWithinDeadline(
+      Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) => index + 2),
+      pageConcurrency,
+      startedAt,
+      20_000,
+      async (page) => parseAppleHydrationData(await readPage(page)),
+    )),
+  ];
 
-  // Reading 350 detail pages inside the click took 30 s and more, so the
-  // response goes out with what is known, and the missing details are read
-  // after it; a row reads "Not Stated" until then.
-  const missing = jobs.filter((job) => !appleQualifications.has(job.id));
-  if (missing.length > 0 && !appleQualificationFill) {
-    const fill = mapWithinDeadline(missing, detailConcurrency, Date.now(), 90_000, async (job) => {
-      appleQualifications.set(job.id, await readAppleQualifications(job.absoluteUrl));
-    }).finally(() => {
-      appleQualificationFill = null;
-    });
-    appleQualificationFill = fill;
-    try {
-      after(() => fill);
-    } catch {
-      // Outside a request there is no response to wait for.
-    }
+  const jobs = new Map<string, ReturnType<typeof parseAppleHydrationData>[number]>();
+  for (const page of pages) {
+    const before = jobs.size;
+    for (const job of page) jobs.set(job.id, job);
+    if (page.length > 0 && jobs.size === before) failedPages += 1;
   }
-
   return {
-    complete: failedPages === 0 && rest.length === pageCount - 1,
-    jobs: jobs.map((job) => ({
-      ...job,
-      contentText: appleQualifications.get(job.id) ?? job.contentText,
-      company: "Apple",
-      boardToken: "apple-jobs",
-      updatedAt: null,
-    })),
+    jobs: [...jobs.values()],
+    complete: pageCount > 0 && failedPages === 0 && pages.length === pageCount,
   };
 }
 
-type PresetResult = { ids: Set<string> } | { jobs: GreenhouseJob[] };
+async function resolveApplePreset(
+  url: string,
+  previous: JobSearchEntry[] | undefined,
+): Promise<JobSearchEntry[]> {
+  const startedAt = Date.now();
+  const { jobs, complete } = await readAppleSearch(url, startedAt);
+
+  // Requirements never change, so a posting already read keeps its entry and
+  // only new ones (or ones whose requirements never came back) cost a request.
+  const known = new Map(
+    (previous ?? [])
+      .filter((entry) => entry.requirement.status !== "not-stated")
+      .map((entry) => [String(entry.job.id), entry]),
+  );
+  const fresh = jobs.filter((job) => !known.has(job.id));
+  const qualifications = new Map<string, string>();
+  await mapWithinDeadline(fresh, detailConcurrency, startedAt, 40_000, async (job) => {
+    const text = await readAppleQualifications(job.absoluteUrl);
+    if (text) qualifications.set(job.id, text);
+  });
+
+  const entries = jobs.map((job) =>
+    known.get(job.id) ??
+    buildSearchEntry({
+      ...job,
+      company: "Apple",
+      boardToken: "apple-jobs",
+      updatedAt: null,
+      contentText: compactExperienceEvidence(qualifications.get(job.id) ?? job.contentText),
+    }),
+  );
+  if (complete) return entries;
+
+  // A partial read keeps the postings the last read had, rather than letting
+  // a refused page make roles vanish until the next build.
+  const ids = new Set(entries.map((entry) => String(entry.job.id)));
+  return [...entries, ...(previous ?? []).filter((entry) => !ids.has(String(entry.job.id)))];
+}
 
 /**
- * Complete results are kept for 10 minutes, so a click does not re-read 28
- * Apple pages from a datacenter IP that Apple partly refuses. A result with a
- * page missing is served but not kept, so the next click retries it.
+ * Resolves every saved search for a new snapshot, so a click is a lookup and
+ * every instance answers the same. Runs inside the background build; a preset
+ * whose site cannot be read keeps what the previous snapshot had.
  */
-const presetResults = new Map<string, { at: number; result: PresetResult }>();
-
-/** What a preset's search returns on its own site: posting ids, or whole rows. */
-export async function resolvePreset(preset: SearchPreset): Promise<PresetResult> {
-  const kept = presetResults.get(preset.id);
-  if (kept && Date.now() - kept.at < 10 * 60 * 1000) {
-    return "jobs" in kept.result
-      ? { jobs: kept.result.jobs.map((job) => ({ ...job, contentText: appleQualifications.get(String(job.id)) ?? job.contentText })) }
-      : kept.result;
-  }
-  if (preset.site === "stripe") {
-    const result = { ids: await resolveStripeSearch(preset.url) };
-    presetResults.set(preset.id, { at: Date.now(), result });
-    return result;
-  }
-  const { jobs, complete } = await resolveAppleSearch(preset.url);
-  if (complete) presetResults.set(preset.id, { at: Date.now(), result: { jobs } });
-  return { jobs };
+export async function resolvePresets(
+  entries: JobSearchEntry[],
+  previous: Record<string, JobSearchEntry[]> | undefined,
+): Promise<Record<string, JobSearchEntry[]>> {
+  const resolved: Record<string, JobSearchEntry[]> = {};
+  await Promise.all(searchPresets.map(async (preset) => {
+    try {
+      if (preset.site === "apple") {
+        resolved[preset.id] = await resolveApplePreset(preset.url, previous?.[preset.id]);
+      } else {
+        const ids = await resolveStripeSearch(preset.url);
+        resolved[preset.id] = entries.filter(
+          (entry) => entry.job.company === preset.company && ids.has(String(entry.job.id)),
+        );
+      }
+    } catch {
+      resolved[preset.id] = previous?.[preset.id] ?? [];
+    }
+  }));
+  return resolved;
 }

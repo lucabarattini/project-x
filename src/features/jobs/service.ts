@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { get, put } from "@vercel/blob";
 import { findPreset } from "./presets";
-import { resolvePreset } from "./preset-sources";
+import { resolvePresets } from "./preset-sources";
 import { compactExperienceEvidence } from "./display";
 import { amazonBoards, fetchLatestAmazonJobs } from "./providers/amazon";
 import { ashbyBoards, fetchLatestAshbyJobs } from "./providers/ashby";
@@ -75,6 +75,8 @@ export type JobSnapshot = {
   entries: JobSearchEntry[];
   fetchedAt: string;
   diagnostics: ProviderDiagnostic[];
+  /** Each saved search's postings, resolved with the snapshot (see presets.ts). */
+  presets?: Record<string, JobSearchEntry[]>;
 };
 
 type FetchJobsOptions = {
@@ -257,10 +259,12 @@ async function buildSnapshotInternal(): Promise<JobSnapshot> {
       contentText: compactExperienceEvidence(job.contentText),
     }));
 
+  const entries = jobs.map(buildSearchEntry);
   return {
-    entries: jobs.map(buildSearchEntry),
+    entries,
     fetchedAt: new Date().toISOString(),
     diagnostics: results.map((result) => result.diagnostic),
+    presets: await resolvePresets(entries, moduleSnapshot?.presets),
   };
 }
 
@@ -517,9 +521,9 @@ const getAmazonLiveEntries = unstable_cache(
  * Seattle search now sees the same roles Amazon's own ATS shows.
  */
 /**
- * The entries a search runs over: a preset's postings as its own site lists
- * them, otherwise the snapshot plus live Amazon hits for a keyword. If the
- * site cannot be read the preset shows nothing rather than guessing.
+ * The entries a search runs over: a preset's postings as its own site listed
+ * them when the snapshot was built, otherwise the snapshot plus live Amazon
+ * hits for a keyword.
  */
 export async function getSearchEntries(
   snapshot: JobSnapshot,
@@ -529,16 +533,7 @@ export async function getSearchEntries(
   if (!preset) {
     return getAugmentedEntries(snapshot, params.q);
   }
-  const result = await resolvePreset(preset).catch(() => ({ ids: new Set<string>() }));
-  if ("jobs" in result) {
-    const byId = new Map(result.jobs.map((job) => [String(job.id), job]));
-    return [...byId.values()].map((job) =>
-      buildSearchEntry({ ...job, contentText: compactExperienceEvidence(job.contentText) }),
-    );
-  }
-  return snapshot.entries.filter(
-    (entry) => entry.job.company === preset.company && result.ids.has(String(entry.job.id)),
-  );
+  return snapshot.presets?.[preset.id] ?? [];
 }
 
 export async function getAugmentedEntries(
