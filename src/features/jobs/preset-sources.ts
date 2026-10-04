@@ -121,7 +121,7 @@ async function readAppleSearch(url: string, startedAt: number) {
       Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) => index + 2),
       pageConcurrency,
       startedAt,
-      20_000,
+      12_000,
       async (page) => parseAppleHydrationData(await readPage(page)),
     )),
   ];
@@ -154,7 +154,7 @@ async function resolveApplePreset(
   );
   const fresh = jobs.filter((job) => !known.has(job.id));
   const qualifications = new Map<string, string>();
-  await mapWithinDeadline(fresh, detailConcurrency, startedAt, 40_000, async (job) => {
+  await mapWithinDeadline(fresh, detailConcurrency, startedAt, 20_000, async (job) => {
     const text = await readAppleQualifications(job.absoluteUrl);
     if (text) qualifications.set(job.id, text);
   });

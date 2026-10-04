@@ -264,7 +264,11 @@ async function buildSnapshotInternal(): Promise<JobSnapshot> {
     entries,
     fetchedAt: new Date().toISOString(),
     diagnostics: results.map((result) => result.diagnostic),
-    presets: await resolvePresets(entries, moduleSnapshot?.presets),
+    // Capped so the build still lands inside the function's 120 s: uncapped,
+    // Apple's pages and detail reads pushed it past the limit, the function
+    // was killed before storing, and every visit served a snapshot hours old.
+    presets: await withTimeout(resolvePresets(entries, moduleSnapshot?.presets), 25_000)
+      .catch(() => moduleSnapshot?.presets),
   };
 }
 
