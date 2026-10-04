@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Portals read as paths; the page still takes the portal from the query.
+  async rewrites() {
+    return [
+      { source: "/nontech", destination: "/?portal=nontech" },
+      { source: "/internships", destination: "/?portal=internships" },
+    ];
+  },
   images: {
     /**
      * Every image this site renders is a company logo in a 32-56px box, so the

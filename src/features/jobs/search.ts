@@ -193,6 +193,15 @@ export function parseSearchParams(
   return params;
 }
 
+/**
+ * The browser URL for a search: the portal is the path, so the address bar
+ * reads /nontech or /internships, and only the filters ride in the query.
+ */
+export function pageUrl(params: JobSearchParams) {
+  const path = params.portal === "non-tech" ? "/nontech" : params.portal === "internships" ? "/internships" : "/";
+  return `${path}${serializeSearchParams({ ...params, portal: defaultSearchParams.portal })}`;
+}
+
 /** Serialize filters into a compact query string, omitting default values. */
 export function serializeSearchParams(params: JobSearchParams): string {
   const url = new URLSearchParams();
@@ -245,8 +254,9 @@ const experienceOrder: Record<string, number> = {
   conflicting: 3,
 };
 
+// btoa/atob rather than Buffer: the same search also runs in the browser.
 function encodeCursor(offset: number) {
-  return Buffer.from(`o:${offset}`, "utf8").toString("base64url");
+  return btoa(`o:${offset}`).replace(/=+$/u, "");
 }
 
 export function nonTechnicalFamilyId(family: NonTechnicalFamily) {
@@ -258,7 +268,7 @@ export { nonTechnicalFamilyOptions };
 export function decodeCursor(cursor: string | null | undefined): number {
   if (!cursor) return 0;
   try {
-    const raw = Buffer.from(cursor, "base64url").toString("utf8");
+    const raw = atob(cursor);
     const offset = Number(raw.startsWith("o:") ? raw.slice(2) : raw);
     return Number.isFinite(offset) && offset >= 0 ? Math.floor(offset) : 0;
   } catch {

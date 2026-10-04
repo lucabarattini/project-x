@@ -87,6 +87,48 @@ export function buildSearchEntry(job: GreenhouseJob): JobSearchEntry {
   };
 }
 
+/**
+ * One snapshot entry as the browser's search index carries it: a tuple
+ * instead of an object (keys repeated 20k times were a third of the bytes),
+ * and only the requirement fields the filters and the badge read.
+ */
+export type IndexRow = [
+  id: number | string,
+  title: string,
+  company: string,
+  boardToken: string,
+  location: string,
+  absoluteUrl: string,
+  postedAt: string | null,
+  updatedAt: string | null,
+  category: string,
+  nonTechFamily: NonTechnicalFamily | null,
+  status: ExperienceRequirement["status"],
+  minYears: number | null,
+  maxYears: number | null,
+];
+
+export function toIndexRow({ job, category, nonTechFamily, requirement }: JobSearchEntry): IndexRow {
+  return [
+    job.id, job.title, job.company, job.boardToken, job.location, job.absoluteUrl,
+    job.postedAt, job.updatedAt, category, nonTechFamily,
+    requirement.status, requirement.effectiveMinYears, requirement.effectiveMaxYears,
+  ];
+}
+
+/** Rebuilds a search entry from an index row; keyword text covers title, company, location and id only. */
+export function fromIndexRow(row: IndexRow): JobSearchEntry {
+  const [id, title, company, boardToken, location, absoluteUrl, postedAt, updatedAt, category, nonTechFamily, status, minYears, maxYears] = row;
+  return {
+    job: { id, title, company, boardToken, location, absoluteUrl, postedAt, updatedAt },
+    category,
+    nonTechFamily,
+    requirement: { status, effectiveMinYears: minYears, effectiveMaxYears: maxYears, evidence: [] },
+    seniorSignal: hasSeniorOrManagerSignal(title),
+    searchText: [title, company, location, category, String(id), `amz${id}`].join(" ").toLowerCase(),
+  };
+}
+
 export function toJobListItem(entry: JobSearchEntry): JobListItem {
   const { job, category, nonTechFamily, requirement } = entry;
   const badge = experienceBadge(requirement, job.title);

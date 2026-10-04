@@ -53,7 +53,7 @@ function SiteHeader({ portal }: { portal: PortalId }) {
               className={`inline-flex min-h-8 items-center gap-1 rounded-md px-2.5 text-xs font-bold transition-colors ${
                 portal === "non-tech" ? "bg-white dark:bg-slate-800 text-slate-950 dark:text-slate-50 shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
-              href="/?portal=nontech"
+              href="/nontech"
             >
               Non-tech
             </Link>
@@ -62,7 +62,7 @@ function SiteHeader({ portal }: { portal: PortalId }) {
               className={`inline-flex min-h-8 items-center gap-1 rounded-md px-2.5 text-xs font-bold transition-colors ${
                 portal === "internships" ? "bg-white dark:bg-slate-800 text-slate-950 dark:text-slate-50 shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
-              href="/?portal=internships"
+              href="/internships"
             >
               Internships
             </Link>
@@ -244,7 +244,7 @@ async function AppSection({ searchParams }: { searchParams: Record<string, strin
       <LogoRail />
 
       <JobDashboard
-        boards={jobBoards}
+        boards={jobBoards.map(({ company, token, source, boardUrl }) => ({ company, token, source, boardUrl }))}
         companyCounts={[...companyCounts.entries()]
           .map(([company, count]) => ({ company, count }))
           .sort((left, right) => left.company.localeCompare(right.company))}

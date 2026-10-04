@@ -21,6 +21,8 @@ import {
   type PortalId,
   defaultSearchParams,
   nonTechnicalFamilyOptions,
+  pageUrl,
+  searchJobs,
   serializeSearchParams,
 } from "../search";
 import { locationFilters, type DateFilter, type JobSortKey } from "../filters";
@@ -30,12 +32,12 @@ import {
   type NonTechnicalFamily,
   type RoleTypeFilter,
 } from "../display";
-import type { JobListItem } from "../search-model";
+import { fromIndexRow, type IndexRow, type JobListItem, type JobSearchEntry } from "../search-model";
 import type { GreenhouseBoard } from "../providers/greenhouse";
 import type { ProviderDiagnostic } from "../service";
 
 type Props = {
-  boards: GreenhouseBoard[];
+  boards: Array<Pick<GreenhouseBoard, "company" | "token" | "source" | "boardUrl">>;
   companyCounts: Array<{ company: string; count: number }>;
   /** Totals for the next wider date windows, used to widen a near-empty "today" default. */
   defaultDateCounts?: Array<{ date: DateFilter; total: number }>;
@@ -119,13 +121,25 @@ function SectionCard({ children, className = "" }: { children: ReactNode; classN
 }
 
 /**
- * Whether `query` is still the search the address bar is showing. Every filter
+ * Whether `url` is still the search the address bar is showing. Every filter
  * change rewrites the URL before it fetches, so the URL is the record of which
  * request is the live one, and a slower earlier response can be dropped
  * without tracking request ids by hand.
  */
-function isCurrentQuery(query: string) {
-  return window.location.search === query;
+function isCurrentUrl(url: string) {
+  return `${window.location.pathname}${window.location.search}` === url;
+}
+
+/** Fetches the whole board as compact rows, so filters can run in the browser. */
+async function loadSearchIndex(): Promise<JobSearchEntry[] | null> {
+  try {
+    const response = await fetch("/api/jobs/index");
+    if (!response.ok) return null;
+    const data = await response.json() as { rows: IndexRow[] };
+    return data.rows.map(fromIndexRow);
+  } catch {
+    return null;
+  }
 }
 
 export function JobDashboard({
@@ -151,6 +165,10 @@ export function JobDashboard({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date>(() => new Date());
   const [widenedDefault, setWidenedDefault] = useState<{ date: DateFilter; todayCount: number } | null>(null);
+  // The board in the browser once /api/jobs/index arrives. Until then, and for
+  // keyword searches (which also read descriptions and live Amazon hits on the
+  // server), each change is a request to /api/jobs/search.
+  const [searchIndex, setSearchIndex] = useState<JobSearchEntry[] | null>(null);
 
   /**
    * Applies a filter change without leaving the page.
@@ -167,11 +185,22 @@ export function JobDashboard({
    */
   const applySearch = useCallback((next: JobSearchParams) => {
     setParams(next);
+    const url = pageUrl(next);
     const query = serializeSearchParams(next);
-    window.history.replaceState(null, "", `/${query}`);
+    window.history.replaceState(null, "", url);
+    setLoadMoreError(null);
+
+    if (searchIndex && !next.q.trim()) {
+      const local = searchJobs(searchIndex, next, 0);
+      setResults(local.jobs);
+      setNextCursor(local.nextCursor);
+      setTotal(local.total);
+      setCompaniesInResults(local.companies);
+      setIsPending(false);
+      return;
+    }
 
     setIsPending(true);
-    setLoadMoreError(null);
 
     void (async () => {
       try {
@@ -179,19 +208,19 @@ export function JobDashboard({
         if (!response.ok) throw new Error(`Search failed (${response.status})`);
         const data = await response.json() as JobSearchResult;
         // A newer click already rewrote the URL: its response is the real one.
-        if (!isCurrentQuery(query)) return;
+        if (!isCurrentUrl(url)) return;
         setResults(data.jobs);
         setNextCursor(data.nextCursor);
         setTotal(data.total);
         setCompaniesInResults(data.companies);
       } catch (error) {
-        if (!isCurrentQuery(query)) return;
+        if (!isCurrentUrl(url)) return;
         setLoadMoreError(error instanceof Error ? error.message : "Could not update the results.");
       } finally {
-        if (isCurrentQuery(query)) setIsPending(false);
+        if (isCurrentUrl(url)) setIsPending(false);
       }
     })();
-  }, []);
+  }, [searchIndex]);
 
   // Keep local state in sync with the server-rendered result page.
   // Deferred to the next frame so a navigation never cascades renders
@@ -211,9 +240,16 @@ export function JobDashboard({
   // Refreshes the current URL search state every five minutes. The server
   // snapshot itself only expires through the 300-second data cache.
   useEffect(() => {
+    const refreshIndex = () => {
+      void loadSearchIndex().then((entries) => {
+        if (entries) setSearchIndex(entries);
+      });
+    };
+    refreshIndex();
     const interval = window.setInterval(() => {
       setLastCheckedAt(new Date());
       router.refresh();
+      refreshIndex();
     }, 5 * 60 * 1000);
     return () => window.clearInterval(interval);
   }, [router]);
@@ -315,6 +351,12 @@ export function JobDashboard({
 
   async function loadMore() {
     if (!nextCursor || isLoadingMore) return;
+    if (searchIndex && !params.q.trim()) {
+      const local = searchJobs(searchIndex, params, results.length);
+      setResults((previous) => [...previous, ...local.jobs]);
+      setNextCursor(local.nextCursor);
+      return;
+    }
     setIsLoadingMore(true);
     setLoadMoreError(null);
     try {
