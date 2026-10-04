@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { after } from "next/server";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { get, put } from "@vercel/blob";
+import { findPreset, resolvePreset } from "./presets";
 import { compactExperienceEvidence } from "./display";
 import { amazonBoards, fetchLatestAmazonJobs } from "./providers/amazon";
 import { ashbyBoards, fetchLatestAshbyJobs } from "./providers/ashby";
@@ -514,6 +515,25 @@ const getAmazonLiveEntries = unstable_cache(
  * portal filtering still happens in searchJobs, so a "financial analyst" +
  * Seattle search now sees the same roles Amazon's own ATS shows.
  */
+/**
+ * The entries a search runs over: a preset's postings as its own site lists
+ * them, otherwise the snapshot plus live Amazon hits for a keyword. If the
+ * site cannot be read the preset shows nothing rather than guessing.
+ */
+export async function getSearchEntries(
+  snapshot: JobSnapshot,
+  params: { q: string; preset: string | null },
+): Promise<JobSearchEntry[]> {
+  const preset = findPreset(params.preset);
+  if (!preset) {
+    return getAugmentedEntries(snapshot, params.q);
+  }
+  const ids = await resolvePreset(preset).catch(() => new Set<string>());
+  return snapshot.entries.filter(
+    (entry) => entry.job.company === preset.company && ids.has(String(entry.job.id)),
+  );
+}
+
 export async function getAugmentedEntries(
   snapshot: JobSnapshot,
   query: string,

@@ -26,6 +26,7 @@ import {
   serializeSearchParams,
 } from "../search";
 import { locationFilters, type DateFilter, type JobSortKey } from "../filters";
+import { searchPresets } from "../presets";
 import {
   nonTechnicalFamilies,
   type ExperienceFilter,
@@ -190,7 +191,7 @@ export function JobDashboard({
     window.history.replaceState(null, "", url);
     setLoadMoreError(null);
 
-    if (searchIndex && !next.q.trim()) {
+    if (searchIndex && !next.q.trim() && !next.preset) {
       const local = searchJobs(searchIndex, next, 0);
       setResults(local.jobs);
       setNextCursor(local.nextCursor);
@@ -351,7 +352,7 @@ export function JobDashboard({
 
   async function loadMore() {
     if (!nextCursor || isLoadingMore) return;
-    if (searchIndex && !params.q.trim()) {
+    if (searchIndex && !params.q.trim() && !params.preset) {
       const local = searchJobs(searchIndex, params, results.length);
       setResults((previous) => [...previous, ...local.jobs]);
       setNextCursor(local.nextCursor);
@@ -426,6 +427,9 @@ export function JobDashboard({
     })),
     ...(params.company ? [{ label: params.company, onClear: () => updateParams({ company: null }) }] : []),
     ...(params.fundsOnly ? [{ label: "Hedge funds & trading", onClear: () => updateParams({ fundsOnly: false }) }] : []),
+    ...searchPresets
+      .filter((preset) => preset.id === params.preset)
+      .map((preset) => ({ label: preset.label, onClear: () => updateParams({ preset: null }) })),
   ];
 
   const filterPanel = (
@@ -459,6 +463,22 @@ export function JobDashboard({
           <span>📈 Hedge funds &amp; trading only</span>
           {params.fundsOnly ? <Icon name="check" className="h-4 w-4 shrink-0" /> : null}
         </button>
+        {searchPresets.map((preset) => (
+          <button
+            aria-pressed={params.preset === preset.id}
+            className="filter-btn mt-2 w-full justify-between"
+            key={preset.id}
+            onClick={() =>
+              updateParams(params.preset === preset.id
+                ? { preset: null }
+                : { preset: preset.id, experience: ["all"], date: "all" })
+            }
+            type="button"
+          >
+            <span>🔖 {preset.label}</span>
+            {params.preset === preset.id ? <Icon name="check" className="h-4 w-4 shrink-0" /> : null}
+          </button>
+        ))}
       </div>
 
       <div>

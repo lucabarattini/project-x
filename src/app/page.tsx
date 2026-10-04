@@ -6,7 +6,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { CompanyLogo } from "@/features/companies/CompanyLogo";
 import { JobDashboard } from "@/features/jobs/dashboard/JobDashboard";
-import { jobBoards, getSnapshot, getAugmentedEntries, type ProviderDiagnostic } from "@/features/jobs/service";
+import { jobBoards, getSnapshot, getSearchEntries, type ProviderDiagnostic } from "@/features/jobs/service";
 import { parseSearchParams, searchJobs, type PortalId } from "@/features/jobs/search";
 
 // The snapshot build runs all ATS providers on first request after expiry;
@@ -178,7 +178,7 @@ function AppSkeleton() {
 async function AppSection({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const params = parseSearchParams(searchParams);
   const snapshot = await getSnapshot();
-  const entries = await getAugmentedEntries(snapshot, params.q);
+  const entries = await getSearchEntries(snapshot, params);
   const initial = searchJobs(entries, params, 0);
 
   // The "today" window can be nearly empty at some hours. Precompute the

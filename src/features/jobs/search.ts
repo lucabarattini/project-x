@@ -85,6 +85,8 @@ export type JobSearchParams = {
   /** Role-family filter used by the non-technical portal. */
   families: NonTechnicalFamily[];
   fundsOnly: boolean;
+  /** A saved careers-site search (see presets.ts); its own site picks the postings. */
+  preset: string | null;
   sort: JobSortKey;
   dir: SortDirection;
   limit: number;
@@ -101,6 +103,7 @@ export const defaultSearchParams: JobSearchParams = {
   roleTypes: [...defaultRoleTracks],
   families: [...nonTechnicalFamilies],
   fundsOnly: false,
+  preset: null,
   sort: "postedAt",
   dir: "desc",
   limit: DEFAULT_PAGE_SIZE,
@@ -172,6 +175,8 @@ export function parseSearchParams(
   if (portal === "nontech") params.portal = "non-tech";
   if (portal === "internships") params.portal = "internships";
   if (firstString(searchParams.funds) === "1") params.fundsOnly = true;
+  const preset = firstString(searchParams.preset);
+  if (preset) params.preset = preset.slice(0, 60);
 
   const families = commaList(searchParams.fam)
     .map((id) => nonTechnicalFamilyById.get(id))
@@ -234,6 +239,7 @@ export function serializeSearchParams(params: JobSearchParams): string {
     url.set("portal", params.portal === "non-tech" ? "nontech" : params.portal);
   }
   if (params.fundsOnly) url.set("funds", "1");
+  if (params.preset) url.set("preset", params.preset);
 
   const defaultFamilies = new Set(defaultSearchParams.families);
   const familiesDiffer =
@@ -408,6 +414,18 @@ export function searchJobs(
   // Selecting any city (e.g. London) overrides the U.S.-only country default,
   // otherwise the country filter would silently exclude every European match.
   const effectiveCountry: CountryFilter = params.locations.length > 0 ? "all" : params.country;
+
+  // A preset's entries were already picked by its own site; only the
+  // experience filter still narrows them.
+  if (params.preset) {
+    return finalizeSearchResult(
+      entries.filter((entry) =>
+        params.experience.some((filter) => matchesExperienceFilter(entry.requirement, entry.job.title, filter)),
+      ),
+      params,
+      cursorOffset,
+    );
+  }
 
   const matched = entries.filter((entry) => {
     const { job, requirement } = entry;

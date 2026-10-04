@@ -310,3 +310,14 @@ test("the hedge funds filter keeps only funds and trading firms", () => {
   assert.deepEqual(searchJobs(data, params).jobs.map((item) => item.id), ["1"]);
   assert.equal(parseSearchParams({ funds: "1" }).fundsOnly, true);
 });
+
+test("a preset's postings skip every filter but experience", () => {
+  const data = entries([
+    job({ id: "1", title: "Backend Engineer", location: "Seattle", postedAt: "2020-01-01T00:00:00.000Z" }),
+    job({ id: "2", title: "Finance Analyst", contentText: "Required Qualifications: 8+ years of finance experience." }),
+  ]);
+  const params = { ...defaultSearchParams, preset: "stripe-gemma" };
+  assert.deepEqual(searchJobs(data, { ...params, experience: ["all"] }).jobs.map((item) => item.id).sort(), ["1", "2"]);
+  assert.deepEqual(searchJobs(data, { ...params, experience: ["senior"] }).jobs.map((item) => item.id), ["2"]);
+  assert.equal(parseSearchParams({ preset: "stripe-gemma" }).preset, "stripe-gemma");
+});

@@ -235,7 +235,7 @@ test("matchesCountry defaults to U.S. based jobs", () => {
 });
 
 test("the Seattle area preset covers the Eastside and Washington, not D.C.", () => {
-  for (const location of ["Seattle, WA", "Redmond, Washington, United States", "USA - Bellevue, WA", "Kirkland, WA, US"]) {
+  for (const location of ["Seattle, WA", "Redmond, Washington, United States", "USA - Bellevue, WA", "Kirkland, WA, US", "SF, SEA, CHI, NYC"]) {
     assert.equal(matchesLocation(location, [seattleAreaLocation]), true, location);
   }
   for (const location of ["Washington, D.C", "Washington DC", "New York, NY", "Portland, OR"]) {

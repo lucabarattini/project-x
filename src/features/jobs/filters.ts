@@ -131,7 +131,8 @@ const nonUsRemotePattern =
   /\b(emea|europe|eu|uk|united kingdom|england|india|canada|apac|asia|latam|brazil|germany|france|spain|poland|portugal|netherlands|ireland|israel|australia|mexico|argentina|colombia|chile|philippines|singapore|japan|international)\b/u;
 
 export function isSeattleArea(location: string) {
-  return seattleAreaPattern.test(location.toLowerCase());
+  // Stripe writes its offices as codes: "SF, SEA, CHI, NYC".
+  return seattleAreaPattern.test(location.toLowerCase()) || /\bSEA\b/u.test(location);
 }
 
 /**
