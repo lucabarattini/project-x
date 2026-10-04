@@ -1,5 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { after } from "next/server";
+import { gunzipSync, gzipSync } from "node:zlib";
+import { get, put } from "@vercel/blob";
 import { compactExperienceEvidence } from "./display";
 import { amazonBoards, fetchLatestAmazonJobs } from "./providers/amazon";
 import { ashbyBoards, fetchLatestAshbyJobs } from "./providers/ashby";
@@ -92,30 +94,6 @@ const snapshotRevalidateSeconds = isServerless ? 600 : 300;
 const greenhouseDetailLimit = isServerless ? 60 : 120;
 
 const snapshotTtlMs = snapshotRevalidateSeconds * 1000;
-
-/**
- * Hard ceiling on how stale a persisted snapshot may be before it is refused.
- *
- * unstable_cache is stale-while-revalidate: once past `revalidate` it keeps
- * serving the old value and rebuilds in the background. If the process exits
- * before that rebuild lands — routine in dev — the same stale entry is served
- * again on the next boot, so a snapshot can outlive its TTL indefinitely. The
- * visible symptom is a day-old snapshot rendering as "no roles published
- * today". Past this ceiling we block on a rebuild instead of serving stale.
- */
-const snapshotMaxStaleMs = 30 * 60 * 1000;
-
-function isStaleBeyondLimit(fetchedAt: string) {
-  const age = Date.now() - Date.parse(fetchedAt);
-  return Number.isNaN(age) || age > snapshotMaxStaleMs;
-}
-
-/**
- * Chunk size for the durable snapshot cache. Next.js refuses to persist
- * unstable_cache entries larger than 2 MB; the full snapshot (11k+ entries)
- * is ~14 MB, so we split it into small chunks that each fit comfortably.
- */
-const snapshotChunkSize = 600;
 
 type ProviderRun = {
   provider: string;
@@ -240,13 +218,6 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
   ];
 }
 
-type ChunkValue = {
-  items: JobSearchEntry[];
-  fetchedAt: string;
-  jobCount: number;
-  diagnostics: ProviderDiagnostic[];
-};
-
 /**
  * Fetches and normalizes the full snapshot. Expensive (all providers), so it
  * runs at most once per process and is persisted as small chunks below.
@@ -347,9 +318,6 @@ async function buildVerifiedSnapshot(): Promise<JobSnapshot> {
     lastGoodEntryCount,
   );
   if (reason) {
-    // Armed here rather than in rebuildSnapshot because a chunk read builds
-    // too: without this a cold instance ran the whole fan-out twice in a row
-    // before it would admit the sources were refusing it.
     unusableRebuildAt = Date.now();
     throw new UnusableSnapshotError(snapshot, reason);
   }
@@ -361,7 +329,7 @@ async function buildVerifiedSnapshot(): Promise<JobSnapshot> {
 /**
  * Entry count of the last snapshot known to be real. The guard above compares
  * a fresh build against it, so it is refreshed both from a successful build and
- * from the persisted chunks — a cold instance that has never built anything
+ * from the stored snapshot — a cold instance that has never built anything
  * still knows how big the board is supposed to be.
  */
 let lastGoodEntryCount = 0;
@@ -377,187 +345,116 @@ const rebuildRetryCooldownMs = 2 * 60 * 1000;
 
 let snapshotBuild: Promise<JobSnapshot> | null = null;
 
-/**
- * The last builds this instance made, by fetchedAt. A chunk is only ever cut
- * from the snapshot its key names: cutting it from whatever build happened to
- * be running mixed two fetches, which showed up as duplicated rows.
- */
-const builtSnapshots = new Map<string, JobSnapshot>();
-
 function ensureSnapshotBuild(): Promise<JobSnapshot> {
   if (!snapshotBuild) {
-    snapshotBuild = buildVerifiedSnapshot()
-      .then((snapshot) => {
-        builtSnapshots.set(snapshot.fetchedAt, snapshot);
-        for (const fetchedAt of builtSnapshots.keys()) {
-          if (builtSnapshots.size <= 2) break;
-          builtSnapshots.delete(fetchedAt);
-        }
-        return snapshot;
-      })
-      .finally(() => {
-        snapshotBuild = null;
-      });
+    snapshotBuild = buildVerifiedSnapshot().finally(() => {
+      snapshotBuild = null;
+    });
   }
   return snapshotBuild;
 }
 
-function chunkOf(snapshot: JobSnapshot, index: number): ChunkValue {
-  const start = index * snapshotChunkSize;
-  return {
-    items: snapshot.entries.slice(start, start + snapshotChunkSize),
-    fetchedAt: snapshot.fetchedAt,
-    jobCount: snapshot.entries.length,
-    diagnostics: snapshot.diagnostics,
-  };
-}
-
-function writeLaterChunks(snapshot: JobSnapshot) {
-  const chunkCount = Math.ceil(snapshot.entries.length / snapshotChunkSize);
-  return Promise.all(
-    Array.from({ length: chunkCount - 1 }, (_, index) =>
-      getSnapshotChunk(`${index + 1}:${snapshot.fetchedAt}`),
-    ),
-  );
-}
-
 /**
- * One slice of the snapshot in the Next.js data cache. Chunk 0 has a fixed
- * key and points at the current snapshot; every later chunk is keyed by that
- * snapshot's fetchedAt.
- *
- * Chunk 0 used to be refreshed on its own: its background revalidation built
- * a new snapshot but stored only slice 0, so the next reader found no chunks
- * for the fetchedAt it named and rebuilt the whole board inline (~70 s on a
- * fresh Vercel instance). Now the rest of a snapshot is written before chunk
- * 0 points at it, and a later chunk never starts a build of its own.
+ * The last good snapshot, kept in Vercel Blob so it outlives both instances
+ * and deployments. The Next.js data cache did neither on Vercel: every deploy
+ * started empty, and its first visitors waited out a ~45 s rebuild each. One
+ * gzipped object overwritten in place, so the store only ever holds one
+ * snapshot (a few MB of the 1 GB plan) however often it is written.
  */
-const getSnapshotChunk = unstable_cache(
-  async (key: string): Promise<ChunkValue> => {
-    const separator = key.indexOf(":");
-    if (separator < 0) {
-      const newest = [...builtSnapshots.values()].at(-1);
-      const snapshot = newest && Date.now() - Date.parse(newest.fetchedAt) < snapshotTtlMs
-        ? newest
-        : await ensureSnapshotBuild();
-      await writeLaterChunks(snapshot);
-      return chunkOf(snapshot, 0);
-    }
-    const snapshot = builtSnapshots.get(key.slice(separator + 1));
-    if (!snapshot) {
-      throw new Error(`Snapshot chunk ${key} is not on this instance`);
-    }
-    return chunkOf(snapshot, Number(key.slice(0, separator)));
-  },
-  ["job-snapshot-chunk-v15"],
-  { revalidate: snapshotRevalidateSeconds },
-);
+const snapshotBlobPath = "snapshot/latest.json.gz";
+let snapshotBlobEtag: string | undefined;
 
-let moduleSnapshot: JobSnapshot | null = null;
-
-/**
- * Builds a fresh snapshot and writes its later chunks; chunk 0 moves to it on
- * its next revalidation, which reuses this build instead of starting another.
- */
-async function buildAndCache(): Promise<JobSnapshot> {
-  const snapshot = await ensureSnapshotBuild();
+/** The stored snapshot, or null when there is none, it is the copy this instance already holds, or no store is configured (local dev). */
+async function readStoredSnapshot(): Promise<JobSnapshot | null> {
   try {
-    await writeLaterChunks(snapshot);
-  } catch {
-    // Cache warming is best-effort; the module snapshot is still served.
-  }
-  return snapshot;
-}
-
-/** Reassembles the persisted snapshot from its chunks, or null if there is none. */
-async function readCachedSnapshot(): Promise<JobSnapshot | null> {
-  try {
-    const first = await getSnapshotChunk("0");
-    const chunkCount = Math.ceil(first.jobCount / snapshotChunkSize);
-    const rest = chunkCount > 1
-      ? await Promise.all(
-          Array.from({ length: chunkCount - 1 }, (_, index) =>
-            getSnapshotChunk(`${index + 1}:${first.fetchedAt}`),
-          ),
-        )
-      : [];
-    lastGoodEntryCount = Math.max(lastGoodEntryCount, first.jobCount);
-    // A chunk missing from the cache is rebuilt from a fresh fetch, whose rows
-    // sit at different offsets than chunk 0's: without this the seam showed
-    // the same posting twice in a row.
-    const seen = new Set<string>();
-    const entries = [...first.items, ...rest.flatMap((chunk) => chunk.items)].filter((entry) => {
-      const key = postingKey(entry.job);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
+    const result = await get(snapshotBlobPath, {
+      access: "private",
+      useCache: false,
+      ifNoneMatch: snapshotBlobEtag,
     });
-    return {
-      entries,
-      fetchedAt: first.fetchedAt,
-      diagnostics: first.diagnostics,
-    };
+    if (result?.statusCode !== 200) return null;
+    snapshotBlobEtag = result.blob.etag;
+    const gzipped = Buffer.from(await new Response(result.stream).arrayBuffer());
+    const snapshot = JSON.parse(gunzipSync(gzipped).toString("utf8")) as JobSnapshot;
+    lastGoodEntryCount = Math.max(lastGoodEntryCount, snapshot.entries.length);
+    return snapshot;
   } catch {
     return null;
   }
 }
 
-export async function getSnapshot(): Promise<JobSnapshot> {
-  if (moduleSnapshot && Date.now() - Date.parse(moduleSnapshot.fetchedAt) < snapshotTtlMs) {
-    return moduleSnapshot;
+async function storeSnapshot(snapshot: JobSnapshot) {
+  try {
+    const result = await put(snapshotBlobPath, gzipSync(JSON.stringify(snapshot)), {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/gzip",
+    });
+    snapshotBlobEtag = result.etag;
+  } catch {
+    // Persisting is best-effort; this instance still serves the new board.
   }
-
-  const cached = await readCachedSnapshot();
-
-  // Stale-while-revalidate may hand back an entry far older than the TTL, and
-  // a personal site is idle for most of the day — so this branch, not the
-  // background refresh, is what most visits actually take. It used to discard
-  // `cached` before rebuilding, which is how a refused rebuild could put a
-  // two-role board on screen while a complete one sat in hand. The rebuild now
-  // carries that snapshot as its fallback, and backs off after one failure
-  // instead of making every visitor wait out the same doomed fan-out.
-  const stale = !cached || isStaleBeyondLimit(cached.fetchedAt);
-  const retryable = Date.now() - unusableRebuildAt >= rebuildRetryCooldownMs;
-  if (stale && retryable) {
-    if (!cached) {
-      return rebuildSnapshot(null);
-    }
-    // Blocking here made the first visit of every idle stretch wait out the
-    // whole ~45 s fan-out. The stale board is served at once and rebuilt
-    // after the response, so the visit after that one is fresh.
-    refreshAfterResponse(cached);
-    moduleSnapshot = cached;
-    return cached;
-  }
-
-  if (cached) {
-    moduleSnapshot = cached;
-    return cached;
-  }
-  // Nothing persisted and still inside the backoff: this instance's own copy
-  // is the last real board there is.
-  if (moduleSnapshot) {
-    return moduleSnapshot;
-  }
-  return rebuildSnapshot(null);
 }
 
-function refreshAfterResponse(fallback: JobSnapshot) {
-  const refresh = () => rebuildSnapshot(fallback).then(() => undefined, () => undefined);
-  try {
-    after(refresh);
-  } catch {
-    // Outside a request (the startup warm-up) there is no response to wait for.
-    void refresh();
-  }
+let moduleSnapshot: JobSnapshot | null = null;
+
+function isFresh(snapshot: JobSnapshot) {
+  return Date.now() - Date.parse(snapshot.fetchedAt) < snapshotTtlMs;
 }
 
 /**
- * Rebuilds and promotes the result to the module fast path. When the rebuild is
- * unusable the last real snapshot is served instead, however old it is: the
- * openings in it were real, and a board that has lost most of its sources is
- * not more honest for being fresh. Nothing is written to the module copy or the
- * chunk cache, so a later request can still pick up a healthy build.
+ * Never makes a visitor wait for the providers while any real board exists:
+ * a cold instance reads the stored snapshot (~1 s), and a stale one is served
+ * as-is while it refreshes after the response. Only a store that has never
+ * been written blocks on a build.
+ */
+export async function getSnapshot(): Promise<JobSnapshot> {
+  if (moduleSnapshot && isFresh(moduleSnapshot)) {
+    return moduleSnapshot;
+  }
+  moduleSnapshot ??= await readStoredSnapshot();
+  if (!moduleSnapshot) {
+    return rebuildSnapshot(null);
+  }
+  if (Date.now() - unusableRebuildAt >= rebuildRetryCooldownMs) {
+    refreshAfterResponse();
+  }
+  return moduleSnapshot;
+}
+
+let snapshotRefresh: Promise<void> | null = null;
+
+function refreshAfterResponse() {
+  snapshotRefresh ??= refreshSnapshot()
+    .catch(() => undefined)
+    .finally(() => {
+      snapshotRefresh = null;
+    });
+  const pending = snapshotRefresh;
+  try {
+    after(() => pending);
+  } catch {
+    // Outside a request (the startup warm-up) there is no response to wait for.
+  }
+}
+
+/** Another instance may have rebuilt already: adopt its snapshot when fresh, fan out to the providers only when not. */
+async function refreshSnapshot() {
+  const stored = await readStoredSnapshot();
+  if (stored && isFresh(stored)) {
+    moduleSnapshot = stored;
+    return;
+  }
+  await rebuildSnapshot(moduleSnapshot);
+}
+
+/**
+ * Rebuilds, promotes the result to the module copy and stores it. When the
+ * rebuild is unusable the last real snapshot is served instead, however old it
+ * is: the openings in it were real, and a board that has lost most of its
+ * sources is not more honest for being fresh. Nothing is stored, so a later
+ * request can still pick up a healthy build.
  *
  * The fresh diagnostics ride along on the fallback, so the dashboard reports
  * which sources are down right now rather than how they looked when the
@@ -565,9 +462,10 @@ function refreshAfterResponse(fallback: JobSnapshot) {
  */
 async function rebuildSnapshot(fallback: JobSnapshot | null): Promise<JobSnapshot> {
   try {
-    const snapshot = await buildAndCache();
+    const snapshot = await ensureSnapshotBuild();
     moduleSnapshot = snapshot;
     unusableRebuildAt = 0;
+    await storeSnapshot(snapshot);
     return snapshot;
   } catch (error) {
     if (!(error instanceof UnusableSnapshotError)) {
