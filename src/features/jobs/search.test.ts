@@ -287,3 +287,26 @@ test("an unknown requisition id falls through to the normal keyword search", () 
   });
   assert.equal(contentMatch.total, 1, "id text inside a description still matches by keyword");
 });
+
+test("internships have a portal of their own and leave the other two", () => {
+  const data = entries([
+    job({ id: "1", title: "Software Engineer Intern, Summer 2027" }),
+    job({ id: "2", title: "Machine Learning Engineer" }),
+    job({ id: "3", title: "Internal Audit Analyst" }),
+  ]);
+  const base = { ...defaultSearchParams, date: "all" as const, experience: ["all" as const] };
+  assert.deepEqual(searchJobs(data, { ...base, portal: "internships" }).jobs.map((item) => item.id), ["1"]);
+  assert.equal(searchJobs(data, base).jobs.some((item) => item.id === "1"), false);
+  assert.deepEqual(parseSearchParams({ portal: "internships" }).portal, "internships");
+  assert.equal(serializeSearchParams({ ...defaultSearchParams, portal: "internships" }), "?portal=internships");
+});
+
+test("the hedge funds filter keeps only funds and trading firms", () => {
+  const data = entries([
+    job({ id: "1", title: "Machine Learning Engineer", company: "Jane Street" }),
+    job({ id: "2", title: "Machine Learning Engineer", company: "Acme" }),
+  ]);
+  const params = { ...defaultSearchParams, date: "all" as const, experience: ["all" as const], fundsOnly: true };
+  assert.deepEqual(searchJobs(data, params).jobs.map((item) => item.id), ["1"]);
+  assert.equal(parseSearchParams({ funds: "1" }).fundsOnly, true);
+});

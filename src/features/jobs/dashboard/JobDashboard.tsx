@@ -18,6 +18,7 @@ import {
 import {
   type JobSearchParams,
   type JobSearchResult,
+  type PortalId,
   defaultSearchParams,
   nonTechnicalFamilyOptions,
   serializeSearchParams,
@@ -301,7 +302,7 @@ export function JobDashboard({
     updateParams({ families: next });
   }
 
-  function switchPortal(portal: "tech" | "non-tech") {
+  function switchPortal(portal: PortalId) {
     if (portal === params.portal) return;
     const next = {
       ...params,
@@ -382,6 +383,7 @@ export function JobDashboard({
       onClear: () => toggleLocation(location),
     })),
     ...(params.company ? [{ label: params.company, onClear: () => updateParams({ company: null }) }] : []),
+    ...(params.fundsOnly ? [{ label: "Hedge funds & trading", onClear: () => updateParams({ fundsOnly: false }) }] : []),
   ];
 
   const filterPanel = (
@@ -406,6 +408,15 @@ export function JobDashboard({
             </button>
           ))}
         </div>
+        <button
+          aria-pressed={params.fundsOnly}
+          className="filter-btn mt-2 w-full justify-between"
+          onClick={() => updateParams({ fundsOnly: !params.fundsOnly })}
+          type="button"
+        >
+          <span>📈 Hedge funds &amp; trading only</span>
+          {params.fundsOnly ? <Icon name="check" className="h-4 w-4 shrink-0" /> : null}
+        </button>
       </div>
 
       <div>
@@ -460,6 +471,7 @@ export function JobDashboard({
         </div>
       </div>
 
+      {params.portal === "internships" ? null : (
       <div>
         <FilterHeading icon={params.portal === "non-tech" ? "users" : "sliders"}>
           {params.portal === "non-tech" ? "Role family" : "Role type"}
@@ -509,6 +521,7 @@ export function JobDashboard({
             : "Needs review is selected by default and never silently removes a role."}
         </p>
       </div>
+      )}
 
       <div>
         <FilterHeading icon="sparkle">Experience fit</FilterHeading>
@@ -580,9 +593,23 @@ export function JobDashboard({
             >
               <Icon name="users" className="h-4 w-4" /> Non-technical
             </button>
+            <button
+              aria-pressed={params.portal === "internships"}
+              className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg px-4 text-sm font-bold transition-colors ${
+                params.portal === "internships"
+                  ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
+              }`}
+              onClick={() => switchPortal("internships")}
+              type="button"
+            >
+              <Icon name="sparkle" className="h-4 w-4" /> Internships
+            </button>
           </div>
           <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            {params.portal === "non-tech"
+            {params.portal === "internships"
+              ? "Internships, co-ops & summer analyst programs"
+              : params.portal === "non-tech"
               ? "Sales, marketing, product, finance, operations & more"
               : "AI, ML, data, forward deployed, quant & infrastructure"}
           </p>
@@ -597,7 +624,7 @@ export function JobDashboard({
               className="input h-11 pl-10"
               id="job-search"
               onChange={(event) => setQDraft(event.target.value)}
-              placeholder={`Search ${params.portal === "non-tech" ? "non-technical" : ""} roles…`}
+              placeholder={params.portal === "internships" ? "Search internships…" : `Search ${params.portal === "non-tech" ? "non-technical" : ""} roles…`}
               type="search"
               value={qDraft}
             />

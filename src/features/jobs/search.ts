@@ -31,7 +31,31 @@ import {
 export const DEFAULT_PAGE_SIZE = 25;
 export const MAX_PAGE_SIZE = 50;
 
-export type PortalId = "tech" | "non-tech";
+export type PortalId = "tech" | "non-tech" | "internships";
+
+/**
+ * Internships get a portal of their own and leave the other two, so a
+ * "Summer 2027 Intern" never sits in a feed of full-time openings.
+ * "Intern" is matched as a word, so "Internal Audit" stays out.
+ */
+const internshipTitlePattern =
+  /\b(intern|interns|internship|internships|co-?op|summer (analyst|associate)|apprentice(ship)?)\b/iu;
+
+export function isInternshipTitle(title: string) {
+  return internshipTitlePattern.test(title);
+}
+
+/** Hedge funds and trading firms among the tracked companies. */
+const hedgeFundCompanies = new Set([
+  "AQR", "Akuna Capital", "Ansatz Capital", "Arrowstreet Capital", "Belvedere Trading",
+  "DRW", "DV Trading", "Engineers Gate", "ExodusPoint", "Five Rings", "Flow Traders",
+  "Geneva Trading", "Hudson River Trading", "IMC", "Jane Street", "Jump Trading",
+  "Man Group", "Old Mission", "Optiver", "PDT Partners", "Point72", "Quadrature Capital",
+  "Radix Trading", "Renaissance Technologies", "Schonfeld", "Squarepoint Capital",
+  "Susquehanna International Group", "TGS Management", "Tower Research Capital",
+  "TransMarket Group", "Valkyrie Trading", "Vatic Labs", "VivCourt", "Virtu Financial",
+  "Voleon", "Voloridge", "WorldQuant", "XTX Markets", "Xantium",
+]);
 
 const nonTechnicalFamilyIds: Record<NonTechnicalFamily, string> = {
   "Sales & Partnerships": "sales",
@@ -60,6 +84,7 @@ export type JobSearchParams = {
   roleTypes: RoleTypeFilter[];
   /** Role-family filter used by the non-technical portal. */
   families: NonTechnicalFamily[];
+  fundsOnly: boolean;
   sort: JobSortKey;
   dir: SortDirection;
   limit: number;
@@ -75,6 +100,7 @@ export const defaultSearchParams: JobSearchParams = {
   experience: [...defaultExperienceFilters],
   roleTypes: [...defaultRoleTracks],
   families: [...nonTechnicalFamilies],
+  fundsOnly: false,
   sort: "postedAt",
   dir: "desc",
   limit: DEFAULT_PAGE_SIZE,
@@ -144,6 +170,8 @@ export function parseSearchParams(
 
   const portal = firstString(searchParams.portal);
   if (portal === "nontech") params.portal = "non-tech";
+  if (portal === "internships") params.portal = "internships";
+  if (firstString(searchParams.funds) === "1") params.fundsOnly = true;
 
   const families = commaList(searchParams.fam)
     .map((id) => nonTechnicalFamilyById.get(id))
@@ -193,7 +221,10 @@ export function serializeSearchParams(params: JobSearchParams): string {
   if (params.dir !== defaultSearchParams.dir) url.set("dir", params.dir);
   if (params.limit !== defaultSearchParams.limit) url.set("limit", String(params.limit));
 
-  if (params.portal !== defaultSearchParams.portal) url.set("portal", "nontech");
+  if (params.portal !== defaultSearchParams.portal) {
+    url.set("portal", params.portal === "non-tech" ? "nontech" : params.portal);
+  }
+  if (params.fundsOnly) url.set("funds", "1");
 
   const defaultFamilies = new Set(defaultSearchParams.families);
   const familiesDiffer =
@@ -251,6 +282,9 @@ function matchesPortal(
   roleTypes: RoleTypeFilter[],
   families: NonTechnicalFamily[],
 ) {
+  const internship = isInternshipTitle(entry.job.title);
+  if (portal === "internships") return internship;
+  if (internship) return false;
   if (portal === "non-tech") {
     return entry.nonTechFamily !== null && families.includes(entry.nonTechFamily);
   }
@@ -369,6 +403,7 @@ export function searchJobs(
     const { job, requirement } = entry;
     return (
       matchesCompany(job.company, params.company) &&
+      (!params.fundsOnly || hedgeFundCompanies.has(job.company)) &&
       matchesCountry(job.location, effectiveCountry) &&
       matchesLocation(job.location, params.locations) &&
       matchesDate(job.postedAt, params.date, now) &&

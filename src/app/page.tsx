@@ -7,7 +7,7 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { CompanyLogo } from "@/features/companies/CompanyLogo";
 import { JobDashboard } from "@/features/jobs/dashboard/JobDashboard";
 import { jobBoards, getSnapshot, getAugmentedEntries, type ProviderDiagnostic } from "@/features/jobs/service";
-import { parseSearchParams, searchJobs } from "@/features/jobs/search";
+import { parseSearchParams, searchJobs, type PortalId } from "@/features/jobs/search";
 
 // The snapshot build runs all ATS providers on first request after expiry;
 // on Vercel serverless it needs more than the default function duration.
@@ -30,7 +30,7 @@ const featuredCompanies = [
   "Figma",
 ];
 
-function SiteHeader({ portal }: { portal: "tech" | "non-tech" }) {
+function SiteHeader({ portal }: { portal: PortalId }) {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-950/90 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
@@ -57,6 +57,15 @@ function SiteHeader({ portal }: { portal: "tech" | "non-tech" }) {
             >
               Non-tech
             </Link>
+            <Link
+              aria-pressed={portal === "internships"}
+              className={`inline-flex min-h-8 items-center gap-1 rounded-md px-2.5 text-xs font-bold transition-colors ${
+                portal === "internships" ? "bg-white dark:bg-slate-800 text-slate-950 dark:text-slate-50 shadow-sm" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+              }`}
+              href="/?portal=internships"
+            >
+              Internships
+            </Link>
           </div>
           <a className="btn btn-ghost hidden !min-h-10 !px-3 !text-sm md:inline-flex" href="/api/jobs">
             JSON feed
@@ -71,20 +80,24 @@ function SiteHeader({ portal }: { portal: "tech" | "non-tech" }) {
   );
 }
 
-function Hero({ portal }: { portal: "tech" | "non-tech" }) {
+function Hero({ portal }: { portal: PortalId }) {
   return (
     <section className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
       <div className="mx-auto w-full max-w-[1400px] px-4 py-10 sm:px-6 lg:px-10 lg:py-14">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700 dark:text-sky-400">
-          {portal === "non-tech" ? "Live non-technical openings" : "Live career-page openings"}
+          {portal === "internships" ? "Live internships" : portal === "non-tech" ? "Live non-technical openings" : "Live career-page openings"}
         </p>
         <h1 className="mt-3 max-w-3xl text-3xl font-bold leading-[1.08] tracking-[-0.03em] text-slate-950 dark:text-slate-50 sm:text-5xl">
-          {portal === "non-tech"
+          {portal === "internships"
+            ? "Internships and co-ops, from the source."
+            : portal === "non-tech"
             ? "Sales, product, marketing, finance & operations — from the source."
             : "The freshest openings, straight from company career pages."}
         </h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 dark:text-slate-400 sm:text-lg">
-          {portal === "non-tech"
+          {portal === "internships"
+            ? "Every posting whose title says intern, internship, co-op or summer analyst, technical or not, pulled from the same official ATS boards."
+            : portal === "non-tech"
             ? "The non-technical side of the same feed: business roles pulled directly from official ATS job boards, with publication dates and source links."
             : "Every role is pulled directly from official ATS career pages and shown with its publication date, experience requirement and source link — no aggregator noise, no guesswork."}
         </p>
