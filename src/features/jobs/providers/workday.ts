@@ -1,5 +1,5 @@
 import boards from "../../../../data/workday-boards.json";
-import { collectBoardResults } from "./concurrency";
+import { collectBoardResults, boardFailure } from "./concurrency";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
 type WorkdayBoard = GreenhouseBoard & {
@@ -222,8 +222,8 @@ export async function fetchLatestWorkdayJobs() {
       try {
         const jobs = await searchWorkdayBoard(board);
         return enrichWorkdayDetails(jobs, board, startedAt, 15_000);
-      } catch {
-        return null;
+      } catch (error) {
+        return boardFailure(board.company, error);
       }
     }),
   );

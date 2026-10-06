@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { describeFailures, takeBoardFailures } from "./providers/concurrency";
 import { after } from "next/server";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { get, head, put } from "@vercel/blob";
@@ -123,6 +124,10 @@ async function runProvider(run: ProviderRun) {
   const startedAt = Date.now();
   try {
     const jobs = await withTimeout(run.run(), run.timeoutMs);
+    const failures = takeBoardFailures(run.provider);
+    if (failures.length > 0) {
+      console.warn(`[jobs] ${run.provider}: ${failures.length} board(s) failed${describeFailures(failures)}`);
+    }
     return {
       jobs,
       diagnostic: {
@@ -132,7 +137,9 @@ async function runProvider(run: ProviderRun) {
         status: jobs.length > 0 ? ("ok" as const) : ("empty" as const),
         jobCount: jobs.length,
         durationMs: Date.now() - startedAt,
-        message: null,
+        message: failures.length > 0
+          ? `${failures.length} board(s) failed${describeFailures(failures)}`.slice(0, 600)
+          : null,
       },
     };
   } catch (error) {

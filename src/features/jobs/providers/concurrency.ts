@@ -61,11 +61,49 @@ export const detailConcurrency = process.env.VERCEL === "1" ? 16 : 24;
  */
 export function collectBoardResults<T>(
   provider: string,
-  results: Array<T[] | null>,
+  results: Array<T[] | BoardFailure | null>,
 ): T[] {
-  const failed = results.filter((result) => result === null).length;
+  const failures = results.filter((result): result is BoardFailure => result instanceof BoardFailure);
+  boardFailures.set(provider, failures);
+  const failed = results.filter((result) => !Array.isArray(result)).length;
   if (failed > 0 && failed === results.length) {
-    throw new Error(`${provider}: all ${failed} board(s) failed`);
+    throw new Error(`${provider}: all ${failed} board(s) failed${describeFailures(failures)}`);
   }
-  return results.filter((result): result is T[] => result !== null).flat();
+  return results.filter((result): result is T[] => Array.isArray(result)).flat();
+}
+
+/**
+ * A board that could not be read, and why. Providers used to return a bare
+ * null, so a source that lost half its boards on Vercel reported "ok" with
+ * nothing to say which boards or what refused them.
+ */
+export class BoardFailure {
+  constructor(readonly board: string, readonly reason: string) {}
+}
+
+export function boardFailure(board: string, error: unknown) {
+  const reason = error instanceof Error
+    ? error.name === "TimeoutError" || error.name === "AbortError"
+      ? "timeout"
+      : error.message.match(/returned (\d{3})/u)?.[1] ?? error.message.slice(0, 60)
+    : String(error).slice(0, 60);
+  return new BoardFailure(board, reason);
+}
+
+const boardFailures = new Map<string, BoardFailure[]>();
+
+/** The failures of a provider's last run, cleared once read. */
+export function takeBoardFailures(provider: string) {
+  const failures = boardFailures.get(provider) ?? [];
+  boardFailures.delete(provider);
+  return failures;
+}
+
+export function describeFailures(failures: BoardFailure[]) {
+  if (failures.length === 0) return "";
+  const byReason = new Map<string, string[]>();
+  for (const failure of failures) {
+    byReason.set(failure.reason, [...(byReason.get(failure.reason) ?? []), failure.board]);
+  }
+  return `: ${[...byReason].map(([reason, boards]) => `${reason} ×${boards.length} (${boards.slice(0, 8).join(", ")}${boards.length > 8 ? ", …" : ""})`).join("; ")}`;
 }

@@ -1,5 +1,5 @@
 import boards from "../../../../data/ashby-boards.json";
-import { collectBoardResults } from "./concurrency";
+import { collectBoardResults, boardFailure } from "./concurrency";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
 type AshbyApiJob = {
@@ -113,8 +113,8 @@ export async function fetchLatestAshbyJobs(options: FetchAshbyJobsOptions = {}) 
           };
         })
         .filter((job): job is GreenhouseJob => job !== null);
-    } catch {
-      return null;
+    } catch (error) {
+      return boardFailure(board.company, error);
     }
   });
 

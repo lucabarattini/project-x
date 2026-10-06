@@ -1,5 +1,5 @@
 import boards from "../../../../data/greenhouse-boards.json";
-import { collectBoardResults } from "./concurrency";
+import { collectBoardResults, boardFailure } from "./concurrency";
 import jobUrlOverrides from "../../../../data/job-url-overrides.json";
 
 export type GreenhouseBoard = {
@@ -205,8 +205,8 @@ export async function fetchLatestGreenhouseJobs(
         postedAt: job.first_published ?? null,
         updatedAt: job.updated_at ?? null,
       }));
-    } catch {
-      return null;
+    } catch (error) {
+      return boardFailure(board.company, error);
     }
   });
 

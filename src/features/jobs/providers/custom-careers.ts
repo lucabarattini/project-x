@@ -1,5 +1,5 @@
 import boards from "../../../../data/custom-careers-boards.json";
-import { collectBoardResults } from "./concurrency";
+import { collectBoardResults, boardFailure } from "./concurrency";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
 export type CustomCareerBoard = GreenhouseBoard & {
@@ -120,8 +120,8 @@ export async function fetchLatestCustomCareerJobs() {
       if (!response.ok) throw new Error(`${board.company} returned ${response.status}`);
       const jobs = parseBoard(await response.text(), board);
       return Promise.all(jobs.map(fetchDetail));
-    } catch {
-      return null;
+    } catch (error) {
+      return boardFailure(board.company, error);
     }
   }));
   return collectBoardResults("custom", results);
