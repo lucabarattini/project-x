@@ -46,7 +46,7 @@ export function stripAshbyHtml(html = "") {
 
 export async function fetchLatestAshbyJobs(options: FetchAshbyJobsOptions = {}) {
   const { limit } = options;
-  const results = await readBoards(ashbyBoards, 12, 8_000, async (board, timeoutMs) => {
+  const results = await readBoards(ashbyBoards, 12, 8_000, 38_000, async (board, timeoutMs) => {
       const response = await fetch(board.apiUrl, {
         cache: "no-store",
         signal: AbortSignal.timeout(timeoutMs),

@@ -99,22 +99,32 @@ const boardFailures = new Map<string, BoardFailure[]>();
  * 9 MB list) were the ones to time out — 20 of 115 Ashby boards and 6
  * Greenhouse ones on a single build, more than half of Ashby's postings.
  * By the second pass most of the field has finished.
+ *
+ * Both passes stay inside `budgetMs`: no read starts after it and a retry
+ * gets at most the time left. Unbounded, the retry pass outlasted Ashby's
+ * provider timeout, which discards every board already read — the whole
+ * source went to zero.
  */
 export async function readBoards<B extends { company: string }, T>(
   boards: B[],
   concurrency: number,
   timeoutMs: number,
+  budgetMs: number,
   read: (board: B, timeoutMs: number) => Promise<T[]>,
 ): Promise<Array<T[] | BoardFailure>> {
+  const startedAt = Date.now();
   const pass = (items: B[], limit: number, ms: number) =>
-    mapWithinDeadline(items, limit, Date.now(), Number.POSITIVE_INFINITY, async (board) =>
-      [board, await read(board, ms).catch((error: unknown) => boardFailure(board.company, error))] as const);
-  const first = await pass(boards, concurrency, timeoutMs);
-  const timedOut = first
+    mapWithinDeadline(items, limit, startedAt, budgetMs, async (board) => {
+      const remaining = Math.max(1, budgetMs - (Date.now() - startedAt));
+      return [board, await read(board, Math.min(ms, remaining)).catch((error: unknown) => boardFailure(board.company, error))] as const;
+    });
+  const first = new Map(await pass(boards, concurrency, timeoutMs));
+  const timedOut = [...first]
     .filter(([, result]) => result instanceof BoardFailure && result.reason === "timeout")
     .map(([board]) => board);
-  const retried = new Map(await pass(timedOut, 4, timeoutMs * 2));
-  return first.map(([board, result]) => retried.get(board) ?? result);
+  const retried = new Map(await pass(timedOut, 6, timeoutMs * 2));
+  return boards.map((board) =>
+    retried.get(board) ?? first.get(board) ?? new BoardFailure(board.company, "not reached"));
 }
 
 /** The failures of a provider's last run, cleared once read. */

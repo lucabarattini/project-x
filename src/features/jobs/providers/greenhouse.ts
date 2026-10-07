@@ -158,7 +158,7 @@ export async function fetchLatestGreenhouseJobs(
   // burst that datacenter IPs get rate-limited on.
   const boardConcurrency = process.env.VERCEL === "1" ? 8 : 12;
 
-  const results = await readBoards(greenhouseBoards, boardConcurrency, 10_000, async (board, timeoutMs) => {
+  const results = await readBoards(greenhouseBoards, boardConcurrency, 10_000, 30_000, async (board, timeoutMs) => {
       const response = await fetch(board.apiUrl, {
         // With `content=true` a large board (Stripe, Anthropic) is 5-9 MB,
         // past the 2 MB the Next.js fetch cache will store; the snapshot is

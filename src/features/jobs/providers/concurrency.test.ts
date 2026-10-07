@@ -8,6 +8,7 @@ test("readBoards reads timed-out boards again, with more time, and leaves other 
     [{ company: "Big" }, { company: "Small" }, { company: "Gone" }],
     4,
     100,
+    10_000,
     async (board, timeoutMs) => {
       calls.push(`${board.company}:${timeoutMs}`);
       if (board.company === "Gone") throw new Error("Gone returned 404");
@@ -19,4 +20,19 @@ test("readBoards reads timed-out boards again, with more time, and leaves other 
   assert.ok(results[2] instanceof BoardFailure && results[2].reason === "404");
   assert.deepEqual(calls.filter((call) => call.startsWith("Big")), ["Big:100", "Big:200"]);
   assert.equal(calls.filter((call) => call.startsWith("Gone")).length, 1);
+});
+
+test("readBoards starts nothing past its budget and reports what it never reached", async () => {
+  const results = await readBoards(
+    [{ company: "Slow" }, { company: "Late" }],
+    1,
+    1_000,
+    30,
+    async (board) => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return [board.company];
+    },
+  );
+  assert.deepEqual(results[0], ["Slow"]);
+  assert.ok(results[1] instanceof BoardFailure && results[1].reason === "not reached");
 });
