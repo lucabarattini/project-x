@@ -105,6 +105,8 @@ const snapshotTtlMs = snapshotRevalidateSeconds * 1000;
 
 type ProviderRun = {
   provider: string;
+  /** The board tokens this provider's postings carry, to recognise them in an older snapshot. */
+  tokens: string[];
   timeoutMs: number;
   run: () => Promise<GreenhouseJob[]>;
 };
@@ -130,6 +132,9 @@ async function runProvider(run: ProviderRun) {
     }
     return {
       jobs,
+      // A board that is gone (404) has nothing to keep; any other failure
+      // (timeout, rate limit, block) is the board being unreachable this run.
+      failedBoards: failures.filter((failure) => failure.reason !== "404").map((failure) => failure.board),
       diagnostic: {
         provider: run.provider,
         // Providers swallow their own fetch errors and return []. Reporting
@@ -146,6 +151,7 @@ async function runProvider(run: ProviderRun) {
     const timedOut = error instanceof Error && error.message === TIMEOUT_SENTINEL;
     return {
       jobs: [],
+      failedBoards: [] as string[],
       diagnostic: {
         provider: run.provider,
         status: timedOut ? ("timeout" as const) : ("error" as const),
@@ -165,21 +171,25 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
   return [
     {
       provider: "greenhouse",
+      tokens: greenhouseBoards.map((board) => board.token),
       timeoutMs: 100_000,
       run: () => fetchLatestGreenhouseJobs({ detailLimit: options.greenhouseDetailLimit ?? greenhouseDetailLimit }),
     },
     {
       provider: "ashby",
+      tokens: ashbyBoards.map((board) => board.token),
       timeoutMs: 75_000,
       run: () => fetchLatestAshbyJobs(),
     },
     {
       provider: "lever",
+      tokens: leverBoards.map((board) => board.token),
       timeoutMs: 20_000,
       run: () => fetchLatestLeverJobs(),
     },
     {
       provider: "workday",
+      tokens: workdayBoards.map((board) => board.token),
       timeoutMs: 20_000,
       run: () => fetchLatestWorkdayJobs(),
     },
@@ -189,6 +199,7 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
       // 25s it timed out on every cold snapshot and the whole board was
       // dropped as unavailable.
       provider: "expedia",
+      tokens: expediaBoards.map((board) => board.token),
       timeoutMs: 50_000,
       run: () => fetchLatestExpediaJobs(),
     },
@@ -196,11 +207,13 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
     // Starbucks down with it.
     ...microsoftBoards.map((board) => ({
       provider: board.company.toLowerCase(),
+      tokens: [board.token],
       timeoutMs: 35_000,
       run: () => fetchLatestPcsxJobs(board),
     })),
     {
       provider: "apple",
+      tokens: appleBoards.map((board) => board.token),
       timeoutMs: 50_000,
       run: () => fetchLatestAppleJobs(),
     },
@@ -208,16 +221,19 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
       // Meta has no list API: every posting costs one detail fetch for its
       // structured data, so it needs the wider budget the fan-out providers get.
       provider: "meta",
+      tokens: metaBoards.map((board) => board.token),
       timeoutMs: 52_000,
       run: () => fetchLatestMetaJobs(),
     },
     {
       provider: "amazon",
+      tokens: amazonBoards.map((board) => board.token),
       timeoutMs: 30_000,
       run: () => fetchLatestAmazonJobs({ maxJobs: options.amazonLimit ?? 600 }),
     },
     {
       provider: "google",
+      tokens: googleBoards.map((board) => board.token),
       timeoutMs: 60_000,
       run: () => fetchLatestGoogleJobs({
         maxJobs: options.googleLimit ?? 400,
@@ -226,6 +242,7 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
     },
     {
       provider: "custom",
+      tokens: customCareerBoards.map((board) => board.token),
       timeoutMs: 15_000,
       run: () => fetchLatestCustomCareerJobs(),
     },
@@ -247,7 +264,25 @@ function postingKey(job: { company: string; title: string; location: string }) {
 }
 
 async function buildSnapshotInternal(): Promise<JobSnapshot> {
-  const results = await Promise.all(buildProviders({}).map(runProvider));
+  const providers = buildProviders({});
+  const results = await Promise.all(providers.map(runProvider));
+
+  // Apple, Microsoft and Meta refuse datacenter IPs now and then, and a slow
+  // board can still miss its budget. Their postings used to vanish from the
+  // board until the next build; the previous snapshot's copy is kept instead,
+  // and the diagnostic says so. A 404 board is gone and is not kept.
+  const carried: JobSearchEntry[] = [];
+  results.forEach((result, index) => {
+    const providerFailed = result.diagnostic.status === "error" || result.diagnostic.status === "timeout";
+    const tokens = new Set(providerFailed ? providers[index].tokens : []);
+    const companies = new Set(result.failedBoards);
+    const kept = (moduleSnapshot?.entries ?? []).filter(
+      (entry) => tokens.has(entry.job.boardToken) || companies.has(entry.job.company),
+    );
+    if (kept.length === 0) return;
+    carried.push(...kept);
+    result.diagnostic.message = `${result.diagnostic.message ?? ""} — kept ${kept.length} postings from the previous build`.trim();
+  });
 
   const seen = new Set<string>();
   const jobs = results
@@ -269,12 +304,17 @@ async function buildSnapshotInternal(): Promise<JobSnapshot> {
       contentText: compactExperienceEvidence(job.contentText),
     }));
 
-  const entries = jobs.map(buildSearchEntry);
+  const entries = [...jobs.map(buildSearchEntry), ...carried.filter((entry) => {
+    const key = postingKey(entry.job);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  })];
   return {
     entries,
     fetchedAt: new Date().toISOString(),
     diagnostics: results.map((result) => result.diagnostic),
-    // Capped so the build still lands inside the function's 120 s: uncapped,
+    // Capped so the build still lands inside the function's limit: uncapped,
     // Apple's pages and detail reads pushed it past the limit, the function
     // was killed before storing, and every visit served a snapshot hours old.
     presets: await withTimeout(resolvePresets(entries, moduleSnapshot?.presets), 25_000)
