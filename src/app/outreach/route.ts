@@ -10,6 +10,12 @@ import { get } from "@vercel/blob";
 export const dynamic = "force-dynamic";
 
 const cookieName = "outreach";
+
+// One light tint per company, so a long sheet reads in blocks.
+const companyColors: Record<string, string> = {
+  DRW: "#fde2e2", Stripe: "#e4e1fb", Shopify: "#ddf3df", Coinbase: "#dbe8fb", Nordstrom: "#efefef",
+  Starbucks: "#d8efe6", Microsoft: "#fff1d6", DoorDash: "#ffe3d6", Amazon: "#fff7cc", Voleon: "#e2f4f6", Expedia: "#e7eefb",
+};
 const contactsPath = "outreach/contacts.json";
 
 type Contact = {
@@ -60,7 +66,7 @@ async function readContacts(): Promise<Contact[]> {
 export async function GET(request: Request) {
   if (!isSignedIn(request)) return loginForm();
   const contacts = await readContacts();
-  const rows = contacts.map((contact, index) => `<tr>
+  const rows = contacts.map((contact, index) => `<tr style="background:${companyColors[contact.company] ?? "#fff"}">
 <td>${index + 1}</td>
 <td><a href="${escape(contact.linkedin)}" target="_blank" rel="noreferrer">${escape(contact.name)}</a><br><small>${escape(contact.title)}</small></td>
 <td>${escape(contact.company)}<br><small>${escape(contact.location)}</small></td>
