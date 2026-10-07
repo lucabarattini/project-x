@@ -148,17 +148,17 @@ export async function fetchLatestGreenhouseJobs(
   options: FetchGreenhouseJobsOptions = {},
 ) {
   const { limit, detailLimit = 120 } = options;
-  // Hard wall-clock budget for the whole run, comfortably inside the caller's
-  // 30s provider timeout. The boards fan-out (41 boards) and the per-job
-  // detail enrichment both degrade to partial results past this deadline.
+  // Wall-clock budget for the whole run, inside the caller's 100 s provider
+  // timeout. The boards fan-out and the per-job detail enrichment both
+  // degrade to partial results past this deadline.
   const startedAt = Date.now();
-  const runDeadlineMs = 40_000;
+  const runDeadlineMs = 90_000;
 
   // Lower board concurrency in serverless to shrink the simultaneous-request
   // burst that datacenter IPs get rate-limited on.
   const boardConcurrency = process.env.VERCEL === "1" ? 8 : 12;
 
-  const results = await readBoards(greenhouseBoards, boardConcurrency, 10_000, 30_000, async (board, timeoutMs) => {
+  const results = await readBoards(greenhouseBoards, boardConcurrency, 20_000, 75_000, async (board, timeoutMs) => {
       const response = await fetch(board.apiUrl, {
         // With `content=true` a large board (Stripe, Anthropic) is 5-9 MB,
         // past the 2 MB the Next.js fetch cache will store; the snapshot is

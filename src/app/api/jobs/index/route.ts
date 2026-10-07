@@ -1,8 +1,9 @@
 import { getSnapshot } from "@/features/jobs/service";
 import { toIndexRow } from "@/features/jobs/search-model";
 
-// Cold snapshot builds can run longer than Vercel's default function limit.
-export const maxDuration = 120;
+// The snapshot rebuild (~2 min, all providers at once) runs after the response
+// inside this function, so it needs Vercel's full 300 s.
+export const maxDuration = 300;
 
 /**
  * Every snapshot entry as a compact row, so the dashboard filters in the

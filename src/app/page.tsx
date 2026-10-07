@@ -11,7 +11,7 @@ import { parseSearchParams, searchJobs, type PortalId } from "@/features/jobs/se
 
 // The snapshot build runs all ATS providers on first request after expiry;
 // on Vercel serverless it needs more than the default function duration.
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export const metadata: Metadata = {
   title: "Live openings from company career pages",

@@ -1,7 +1,8 @@
 import { fetchLatestJobs, jobBoards } from "@/features/jobs/service";
 
-// Cold snapshot builds can run longer than Vercel's default function limit.
-export const maxDuration = 120;
+// The snapshot rebuild (~2 min, all providers at once) runs after the response
+// inside this function, so it needs Vercel's full 300 s.
+export const maxDuration = 300;
 
 export async function GET() {
   const jobs = await fetchLatestJobs();
