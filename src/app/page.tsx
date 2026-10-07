@@ -67,6 +67,9 @@ function SiteHeader({ portal }: { portal: PortalId }) {
               Internships
             </Link>
           </div>
+          <a className="btn btn-ghost !min-h-10 !px-3 !text-sm" href="/outreach">
+            Outreach
+          </a>
           <a className="btn btn-ghost hidden !min-h-10 !px-3 !text-sm md:inline-flex" href="/api/jobs">
             JSON feed
           </a>
