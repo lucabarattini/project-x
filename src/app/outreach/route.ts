@@ -21,6 +21,8 @@ type Contact = {
   hook: string;
   why: string;
   email?: string;
+  emails?: Array<{ email: string; type?: string; grade?: string; source: string }>;
+  draft?: { subject: string; body: string };
   status?: string;
 };
 
@@ -63,11 +65,12 @@ export async function GET(request: Request) {
 <td><a href="${escape(contact.linkedin)}" target="_blank" rel="noreferrer">${escape(contact.name)}</a><br><small>${escape(contact.title)}</small></td>
 <td>${escape(contact.company)}<br><small>${escape(contact.location)}</small></td>
 <td><b>${escape(contact.hook)}</b><br><small>${escape(contact.why)}</small></td>
-<td>${escape(contact.email ?? "")}</td>
-<td>${escape(contact.status ?? "")}</td>
+<td>${(contact.emails ?? []).map((email) => `${escape(email.email)}<br><small>${escape([email.type, email.grade, email.source].filter(Boolean).join(" · "))}</small>`).join("<br>")}</td>
+<td>${contact.draft ? `<details><summary>${escape(contact.draft.subject)}</summary><pre style="white-space:pre-wrap;font:inherit">${escape(contact.draft.body)}</pre></details>` : ""}<small>${escape(contact.status ?? "")}</small></td>
 </tr>`).join("");
-  return page(`<h1>Outreach for Gemma <small>${contacts.length} people</small></h1>
-<table><thead><tr><th>#</th><th>Person</th><th>Company</th><th>Hook</th><th>Email</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`);
+  const withEmail = contacts.filter((contact) => contact.emails?.length).length;
+  return page(`<h1>Outreach for Gemma <small>${contacts.length} people · ${withEmail} with an email</small></h1>
+<table><thead><tr><th>#</th><th>Person</th><th>Company</th><th>Hook</th><th>Emails found</th><th>Draft</th></tr></thead><tbody>${rows}</tbody></table>`);
 }
 
 export async function POST(request: Request) {
