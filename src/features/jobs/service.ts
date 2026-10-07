@@ -165,12 +165,12 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
   return [
     {
       provider: "greenhouse",
-      timeoutMs: 30_000,
+      timeoutMs: 50_000,
       run: () => fetchLatestGreenhouseJobs({ detailLimit: options.greenhouseDetailLimit ?? greenhouseDetailLimit }),
     },
     {
       provider: "ashby",
-      timeoutMs: 25_000,
+      timeoutMs: 45_000,
       run: () => fetchLatestAshbyJobs(),
     },
     {
@@ -218,7 +218,7 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
     },
     {
       provider: "google",
-      timeoutMs: 30_000,
+      timeoutMs: 40_000,
       run: () => fetchLatestGoogleJobs({
         maxJobs: options.googleLimit ?? 400,
         maxPages: options.googlePages ?? 12,

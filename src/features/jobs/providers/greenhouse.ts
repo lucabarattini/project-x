@@ -1,5 +1,5 @@
 import boards from "../../../../data/greenhouse-boards.json";
-import { collectBoardResults, boardFailure } from "./concurrency";
+import { collectBoardResults, readBoards } from "./concurrency";
 import jobUrlOverrides from "../../../../data/job-url-overrides.json";
 
 export type GreenhouseBoard = {
@@ -92,26 +92,6 @@ function stripHtml(html = "") {
     .trim();
 }
 
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  mapper: (item: T) => Promise<R>,
-) {
-  const results: R[] = [];
-  let index = 0;
-
-  async function worker() {
-    while (index < items.length) {
-      const current = items[index];
-      index += 1;
-      results.push(await mapper(current));
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
-
 async function fetchJobContent(boardToken: string, jobId: number) {
   try {
     const response = await fetch(
@@ -172,20 +152,19 @@ export async function fetchLatestGreenhouseJobs(
   // 30s provider timeout. The boards fan-out (41 boards) and the per-job
   // detail enrichment both degrade to partial results past this deadline.
   const startedAt = Date.now();
-  const runDeadlineMs = 24_000;
+  const runDeadlineMs = 40_000;
 
   // Lower board concurrency in serverless to shrink the simultaneous-request
   // burst that datacenter IPs get rate-limited on.
   const boardConcurrency = process.env.VERCEL === "1" ? 8 : 12;
 
-  const results = await mapWithConcurrency(greenhouseBoards, boardConcurrency, async (board) => {
-    try {
+  const results = await readBoards(greenhouseBoards, boardConcurrency, 10_000, async (board, timeoutMs) => {
       const response = await fetch(board.apiUrl, {
         // With `content=true` a large board (Stripe, Anthropic) is 5-9 MB,
         // past the 2 MB the Next.js fetch cache will store; the snapshot is
         // what gets cached, so the raw list is not.
         cache: "no-store",
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       if (!response.ok) {
@@ -205,9 +184,6 @@ export async function fetchLatestGreenhouseJobs(
         postedAt: job.first_published ?? null,
         updatedAt: job.updated_at ?? null,
       }));
-    } catch (error) {
-      return boardFailure(board.company, error);
-    }
   });
 
   const sortedJobs = collectBoardResults("greenhouse", results).sort((a, b) => {

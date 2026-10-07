@@ -229,7 +229,7 @@ export function parseGoogleDatePostedHtml(html: string) {
 
 async function fetchGooglePage(page: number) {
   const response = await fetch(googlePageUrl(page), {
-    signal: AbortSignal.timeout(8_000),
+    signal: AbortSignal.timeout(15_000),
     headers: {
       accept: "text/html,application/xhtml+xml",
       "accept-language": "en-US,en;q=0.9",
@@ -272,7 +272,11 @@ export async function fetchLatestGoogleJobs(options: FetchGoogleJobsOptions = {}
   const jobs: GreenhouseJob[] = [];
   const seen = new Set<string>();
 
-  for (const { html } of await fetchGooglePagesConcurrently(maxPages)) {
+  const pages = await fetchGooglePagesConcurrently(maxPages);
+  if (pages.every(({ html }) => html === null)) {
+    throw new Error(`Google: all ${pages.length} result pages failed`);
+  }
+  for (const { html } of pages) {
     if (!html) continue;
     try {
       const parsedJobs = parseGoogleJobsHtml(html);

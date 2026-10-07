@@ -203,7 +203,7 @@ async function fetchAmazonPage(
   });
   const url = `${board.apiUrl}&${params.toString()}`;
   const response = await fetch(url, {
-    signal: AbortSignal.timeout(4_000),
+    signal: AbortSignal.timeout(12_000),
     headers: {
       accept: "application/json",
       "accept-language": "en-US,en;q=0.9",
@@ -271,7 +271,10 @@ export async function fetchLatestAmazonJobs(options: FetchAmazonJobsOptions = {}
       if (jobs.length < pageSize) {
         break;
       }
-    } catch {
+    } catch (error) {
+      // A later page failing still leaves a real partial board; page one
+      // failing is an outage, which [] used to report as "no openings".
+      if (results.length === 0) throw error;
       break;
     }
   }

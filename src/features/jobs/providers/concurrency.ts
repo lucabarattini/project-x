@@ -92,6 +92,31 @@ export function boardFailure(board: string, error: unknown) {
 
 const boardFailures = new Map<string, BoardFailure[]>();
 
+/**
+ * Reads every board, then reads the ones that timed out once more, four at a
+ * time and with twice the time. On Vercel the snapshot runs every provider in
+ * one function at once, so the largest boards (Applied Intuition, Anthropic's
+ * 9 MB list) were the ones to time out — 20 of 115 Ashby boards and 6
+ * Greenhouse ones on a single build, more than half of Ashby's postings.
+ * By the second pass most of the field has finished.
+ */
+export async function readBoards<B extends { company: string }, T>(
+  boards: B[],
+  concurrency: number,
+  timeoutMs: number,
+  read: (board: B, timeoutMs: number) => Promise<T[]>,
+): Promise<Array<T[] | BoardFailure>> {
+  const pass = (items: B[], limit: number, ms: number) =>
+    mapWithinDeadline(items, limit, Date.now(), Number.POSITIVE_INFINITY, async (board) =>
+      [board, await read(board, ms).catch((error: unknown) => boardFailure(board.company, error))] as const);
+  const first = await pass(boards, concurrency, timeoutMs);
+  const timedOut = first
+    .filter(([, result]) => result instanceof BoardFailure && result.reason === "timeout")
+    .map(([board]) => board);
+  const retried = new Map(await pass(timedOut, 4, timeoutMs * 2));
+  return first.map(([board, result]) => retried.get(board) ?? result);
+}
+
 /** The failures of a provider's last run, cleared once read. */
 export function takeBoardFailures(provider: string) {
   const failures = boardFailures.get(provider) ?? [];
