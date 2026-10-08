@@ -35,6 +35,8 @@ type Contact = {
   repliedAt?: string;
   bouncedAt?: string;
   dropped?: string;
+  // How close the role is to Gemma's path, ranked within the company (1 = write first).
+  fit?: { rank: number; function: string; open: string[] };
 };
 
 function sessionToken() {
@@ -96,15 +98,16 @@ async function readContacts(): Promise<Contact[]> {
 export async function GET(request: Request) {
   if (!isSignedIn(request)) return loginForm();
   const listed = (await readContacts()).filter((contact) => !contact.dropped);
-  // Companies keep their priority order; inside each one: replied, waiting on a reply, bounced, not sent yet.
+  // Companies keep their priority order; inside each one: replied, waiting on a reply, bounced, not sent yet,
+  // and within each of those, the best role fit first.
   const companies = [...new Set(listed.map((contact) => contact.company))];
   const stage = (contact: Contact) => (contact.repliedAt ? 0 : contact.bouncedAt ? 2 : contact.sentAt ? 1 : 3);
-  const contacts = [...listed].sort((a, b) => companies.indexOf(a.company) - companies.indexOf(b.company) || stage(a) - stage(b));
+  const contacts = [...listed].sort((a, b) => companies.indexOf(a.company) - companies.indexOf(b.company) || stage(a) - stage(b) || (a.fit?.rank ?? 99) - (b.fit?.rank ?? 99));
   const rows = contacts.map((contact, index) => `<tr style="background:${companyColors[contact.company] ?? "#fff"}">
 <td>${index + 1}</td>
 <td><a href="${escape(contact.linkedin)}" target="_blank" rel="noreferrer">${escape(contact.name)}</a><br><small>${escape(contact.title)}</small></td>
 <td>${escape(contact.company)}<br><small>${escape(contact.location)}</small></td>
-<td><b>${escape(contact.hook)}</b><br><small>${escape(contact.why)}</small></td>
+<td><b>${escape(contact.hook)}</b><br><small>${escape(contact.why)}</small>${contact.fit ? `<br><small>fit #${contact.fit.rank} · ${escape(contact.fit.function)}${contact.fit.open.length ? ` · open: ${escape(contact.fit.open.join("; "))}` : ""}</small>` : ""}</td>
 <td>${(contact.emails ?? []).map((email) => `${email.role === "skip" ? `<s>${escape(email.email)}</s>` : escape(email.email)}<br><small>${escape([email.role?.toUpperCase(), email.type, email.grade, email.source, email.note].filter(Boolean).join(" · "))}</small>`).join("<br>")}</td>
 <td style="text-align:center">${contact.sentAt ? `✅<br><small>${escape(contact.sentAt)}</small>` : "❌"}</td>
 <td style="text-align:center">${contact.repliedAt ? `✅<br><small>${escape(contact.repliedAt)}</small>` : contact.sentAt ? `❌${contact.bouncedAt ? "" : `<br><small>follow up ${followUpDate(contact.sentAt)}</small>`}` : ""}</td>
