@@ -18,6 +18,7 @@ import {
 import { fetchLatestLeverJobs, leverBoards } from "./providers/lever";
 import { fetchLatestWorkdayJobs, workdayBoards } from "./providers/workday";
 import { expediaBoards, fetchLatestExpediaJobs } from "./providers/expedia";
+import { fetchLatestShopifyJobs, shopifyBoards } from "./providers/shopify";
 import { fetchLatestPcsxJobs, microsoftBoards } from "./providers/microsoft";
 import { appleBoards, fetchLatestAppleJobs } from "./providers/apple";
 import { fetchLatestMetaJobs, metaBoards } from "./providers/meta";
@@ -59,6 +60,7 @@ export const jobBoards: JobBoard[] = [
   ...googleBoards,
   ...customCareerBoards,
   ...expediaBoards,
+  ...shopifyBoards,
   ...microsoftBoards,
   ...appleBoards,
   ...metaBoards,
@@ -202,6 +204,14 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
       tokens: expediaBoards.map((board) => board.token),
       timeoutMs: 50_000,
       run: () => fetchLatestExpediaJobs(),
+    },
+    {
+      // Same shape as Expedia: one careers page lists every posting, then one
+      // page per posting carries the description.
+      provider: "shopify",
+      tokens: shopifyBoards.map((board) => board.token),
+      timeoutMs: 50_000,
+      run: () => fetchLatestShopifyJobs(),
     },
     // One run per Eightfold site, so a throttled Microsoft never takes
     // Starbucks down with it.

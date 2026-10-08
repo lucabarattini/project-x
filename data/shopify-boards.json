@@ -1,0 +1,10 @@
+[
+  {
+    "company": "Shopify",
+    "token": "shopify",
+    "source": "official-careers-page,react-router-turbo-stream",
+    "boardUrl": "https://www.shopify.com/careers",
+    "apiUrl": "https://www.shopify.com/careers",
+    "lastVerifiedJobCount": 117
+  }
+]
