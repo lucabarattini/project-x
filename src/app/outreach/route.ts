@@ -27,9 +27,13 @@ type Contact = {
   hook: string;
   why: string;
   email?: string;
-  emails?: Array<{ email: string; type?: string; grade?: string; source: string }>;
+  emails?: Array<{ email: string; type?: string; grade?: string; source: string; role?: "to" | "bcc" | "skip"; note?: string }>;
   draft?: { subject: string; body: string };
   status?: string;
+  // Filled from Gemma's Gmail: when the email went out, and what came back.
+  sentAt?: string;
+  repliedAt?: string;
+  bouncedAt?: string;
 };
 
 function sessionToken() {
@@ -57,6 +61,28 @@ function page(body: string, status = 200, headers: Record<string, string> = {}) 
 const loginForm = (error = "") =>
   page(`<form method="post"><p>${error}</p><input type="password" name="password" autofocus> <button>Enter</button></form>`, error ? 401 : 200);
 
+const percent = (part: number, whole: number) => (whole ? `${Math.round((part / whole) * 100)}%` : "–");
+
+// One row per company plus a total: how far each list got, from found to replied.
+function dashboard(contacts: Contact[]) {
+  const companies = [...new Set(contacts.map((contact) => contact.company)), "All"];
+  const rows = companies.map((company) => {
+    const list = company === "All" ? contacts : contacts.filter((contact) => contact.company === company);
+    const sent = list.filter((contact) => contact.sentAt).length;
+    const replied = list.filter((contact) => contact.repliedAt).length;
+    const bounced = list.filter((contact) => contact.bouncedAt).length;
+    const cells = [
+      list.length,
+      list.filter((contact) => contact.emails?.some((email) => email.role !== "skip")).length,
+      list.filter((contact) => contact.status?.startsWith("in Gmail drafts")).length,
+      sent, replied, bounced, percent(replied, sent - bounced),
+    ];
+    const style = company === "All" ? "font-weight:600" : `background:${companyColors[company] ?? "#fff"}`;
+    return `<tr style="${style}"><td>${escape(company)}</td>${cells.map((cell) => `<td>${cell}</td>`).join("")}</tr>`;
+  });
+  return `<table style="width:auto;margin-bottom:24px"><thead><tr><th>Company</th><th>People</th><th>Usable email</th><th>Drafted</th><th>Sent</th><th>Replied</th><th>Bounced</th><th>Reply rate</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+}
+
 async function readContacts(): Promise<Contact[]> {
   const result = await get(contactsPath, { access: "private", useCache: false }).catch(() => null);
   if (result?.statusCode !== 200) return [];
@@ -71,11 +97,11 @@ export async function GET(request: Request) {
 <td><a href="${escape(contact.linkedin)}" target="_blank" rel="noreferrer">${escape(contact.name)}</a><br><small>${escape(contact.title)}</small></td>
 <td>${escape(contact.company)}<br><small>${escape(contact.location)}</small></td>
 <td><b>${escape(contact.hook)}</b><br><small>${escape(contact.why)}</small></td>
-<td>${(contact.emails ?? []).map((email) => `${escape(email.email)}<br><small>${escape([email.type, email.grade, email.source].filter(Boolean).join(" · "))}</small>`).join("<br>")}</td>
-<td>${contact.draft ? `<details><summary>${escape(contact.draft.subject)}</summary><pre style="white-space:pre-wrap;font:inherit">${escape(contact.draft.body)}</pre></details>` : ""}<small>${escape(contact.status ?? "")}</small></td>
+<td>${(contact.emails ?? []).map((email) => `${email.role === "skip" ? `<s>${escape(email.email)}</s>` : escape(email.email)}<br><small>${escape([email.role?.toUpperCase(), email.type, email.grade, email.source, email.note].filter(Boolean).join(" · "))}</small>`).join("<br>")}</td>
+<td>${contact.draft ? `<details><summary>${escape(contact.draft.subject)}</summary><pre style="white-space:pre-wrap;font:inherit">${escape(contact.draft.body)}</pre></details>` : ""}<small>${escape([contact.status, contact.sentAt && `sent ${contact.sentAt}`, contact.repliedAt && `replied ${contact.repliedAt}`, contact.bouncedAt && `bounced ${contact.bouncedAt}`].filter(Boolean).join(" · "))}</small></td>
 </tr>`).join("");
-  const withEmail = contacts.filter((contact) => contact.emails?.length).length;
-  return page(`<h1>Outreach for Gemma <small>${contacts.length} people · ${withEmail} with an email</small></h1>
+  return page(`<h1>Outreach for Gemma</h1>
+${dashboard(contacts)}
 <table><thead><tr><th>#</th><th>Person</th><th>Company</th><th>Hook</th><th>Emails found</th><th>Draft</th></tr></thead><tbody>${rows}</tbody></table>`);
 }
 
