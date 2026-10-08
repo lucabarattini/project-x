@@ -80,7 +80,7 @@ function dashboard(contacts: Contact[]) {
     const style = company === "All" ? "font-weight:600" : `background:${companyColors[company] ?? "#fff"}`;
     return `<tr style="${style}"><td>${escape(company)}</td>${cells.map((cell) => `<td>${cell}</td>`).join("")}</tr>`;
   });
-  return `<table style="width:auto;margin-bottom:24px"><thead><tr><th>Company</th><th>People</th><th>Usable email</th><th>Drafted</th><th>Sent</th><th>Replied</th><th>Bounced</th><th>Reply rate</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+  return `<table style="width:auto;margin-bottom:24px"><thead><tr><th>Company</th><th>People</th><th>Usable email</th><th>In drafts</th><th>Sent</th><th>Replied</th><th>Bounced</th><th>Reply rate</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
 }
 
 async function readContacts(): Promise<Contact[]> {
