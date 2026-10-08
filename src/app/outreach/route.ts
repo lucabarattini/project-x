@@ -109,7 +109,7 @@ export async function GET(request: Request) {
 <td>${escape(contact.company)}<br><small>${escape(contact.location)}</small></td>
 <td><b>${escape(contact.hook)}</b><br><small>${escape(contact.why)}</small>${contact.fit ? `<br><small>fit #${contact.fit.rank} · ${escape(contact.fit.function)}${contact.fit.open.length ? ` · open: ${escape(contact.fit.open.join("; "))}` : ""}</small>` : ""}</td>
 <td>${(contact.emails ?? []).map((email) => `${email.role === "skip" ? `<s>${escape(email.email)}</s>` : escape(email.email)}<br><small>${escape([email.role?.toUpperCase(), email.type, email.grade, email.source, email.note].filter(Boolean).join(" · "))}</small>`).join("<br>")}</td>
-<td style="text-align:center">${contact.sentAt ? `✅<br><small>${escape(contact.sentAt)}</small>` : "❌"}</td>
+<td style="text-align:center">${contact.sentAt ? `✅<br><small>${escape(contact.sentAt)}</small>` : ""}</td>
 <td style="text-align:center">${contact.repliedAt ? `✅<br><small>${escape(contact.repliedAt)}</small>` : contact.sentAt ? `❌${contact.bouncedAt ? "" : `<br><small>follow up ${followUpDate(contact.sentAt)}</small>`}` : ""}</td>
 <td style="text-align:center">${contact.bouncedAt ? `✅<br><small>${escape(contact.bouncedAt)}</small>` : contact.sentAt ? "❌" : ""}</td>
 <td>${contact.draft ? `<details><summary>${escape(contact.draft.subject)}</summary><pre style="white-space:pre-wrap;font:inherit">${escape(contact.draft.body)}</pre></details>` : ""}<small>${escape(contact.status ?? "")}</small></td>
