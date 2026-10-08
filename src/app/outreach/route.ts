@@ -98,11 +98,12 @@ export async function GET(request: Request) {
 <td>${escape(contact.company)}<br><small>${escape(contact.location)}</small></td>
 <td><b>${escape(contact.hook)}</b><br><small>${escape(contact.why)}</small></td>
 <td>${(contact.emails ?? []).map((email) => `${email.role === "skip" ? `<s>${escape(email.email)}</s>` : escape(email.email)}<br><small>${escape([email.role?.toUpperCase(), email.type, email.grade, email.source, email.note].filter(Boolean).join(" · "))}</small>`).join("<br>")}</td>
-<td>${contact.draft ? `<details><summary>${escape(contact.draft.subject)}</summary><pre style="white-space:pre-wrap;font:inherit">${escape(contact.draft.body)}</pre></details>` : ""}<small>${escape([contact.status, contact.sentAt && `sent ${contact.sentAt}`, contact.repliedAt && `replied ${contact.repliedAt}`, contact.bouncedAt && `bounced ${contact.bouncedAt}`].filter(Boolean).join(" · "))}</small></td>
+<td style="text-align:center">${contact.sentAt ? "✅" : "❌"}${contact.sentAt ? `<br><small>${escape([contact.sentAt, contact.repliedAt && "replied", contact.bouncedAt && "bounced"].filter(Boolean).join(" · "))}</small>` : ""}</td>
+<td>${contact.draft ? `<details><summary>${escape(contact.draft.subject)}</summary><pre style="white-space:pre-wrap;font:inherit">${escape(contact.draft.body)}</pre></details>` : ""}<small>${escape(contact.status ?? "")}</small></td>
 </tr>`).join("");
   return page(`<h1>Outreach for Gemma</h1>
 ${dashboard(contacts)}
-<table><thead><tr><th>#</th><th>Person</th><th>Company</th><th>Hook</th><th>Emails found</th><th>Draft</th></tr></thead><tbody>${rows}</tbody></table>`);
+<table><thead><tr><th>#</th><th>Person</th><th>Company</th><th>Hook</th><th>Emails found</th><th>Email sent</th><th>Draft</th></tr></thead><tbody>${rows}</tbody></table>`);
 }
 
 export async function POST(request: Request) {
