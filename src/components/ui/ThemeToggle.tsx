@@ -1,38 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Icon } from "./Icon";
 
 const storageKey = "theme";
 
-export function themeInitialValue() {
-  if (typeof window === "undefined") return "light";
-  try {
-    const stored = window.localStorage.getItem(storageKey);
-    if (stored === "dark" || stored === "light") return stored;
-  } catch {
-    // fall through to the system preference
-  }
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+// The <head> script in the root layout puts the saved/system theme on <html>
+// before first paint; this component follows that class rather than owning it.
+function subscribe(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  return () => observer.disconnect();
 }
 
-export function applyTheme(theme: "dark" | "light") {
-  document.documentElement.classList.toggle("dark", theme === "dark");
-}
+const isDark = () => document.documentElement.classList.contains("dark");
 
 export function ThemeToggle() {
-  // The <head> script applies the saved/system theme before hydration, so the
-  // initial class is already on <html> when this component first renders.
-  const [dark, setDark] = useState(() =>
-    typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
-  );
+  // The server can't know the theme, so hydration uses its light-mode markup
+  // and React switches to the real class right after, without a mismatch.
+  const dark = useSyncExternalStore(subscribe, isDark, () => false);
 
   function toggle() {
-    const next = !dark;
-    setDark(next);
-    applyTheme(next ? "dark" : "light");
+    const next = dark ? "light" : "dark";
+    document.documentElement.classList.toggle("dark", next === "dark");
     try {
-      window.localStorage.setItem(storageKey, next ? "dark" : "light");
+      window.localStorage.setItem(storageKey, next);
     } catch {
       // The toggle still works for this page view without storage.
     }

@@ -385,6 +385,12 @@
     "domain": "sambanova.ai",
     "logoPath": "/company-logos/sambanova.png"
   },
+  "Shopify": {
+    "source": "simple-icons",
+    "title": "Shopify",
+    "domain": "shopify.com",
+    "logoPath": "/company-logos/shopify.png"
+  },
   "Sierra": {
     "source": "favicon",
     "domain": "sierra.ai",
