@@ -1091,5 +1091,146 @@
     "title": "F5",
     "domain": "f5.com",
     "logoPath": "/company-logos/f5.png"
+  },
+  "Nike": {
+    "source": "simple-icons",
+    "title": "Nike",
+    "domain": "nike.com",
+    "logoPath": "/company-logos/nike.png"
+  },
+  "Stitch Fix": {
+    "source": "favicon",
+    "domain": "stitchfix.com",
+    "logoPath": "/company-logos/stitchfix.png"
+  },
+  "Faire": {
+    "source": "favicon",
+    "domain": "faire.com",
+    "logoPath": "/company-logos/faire.png"
+  },
+  "Quince": {
+    "source": "favicon",
+    "domain": "onequince.com",
+    "logoPath": "/company-logos/quince.png"
+  },
+  "Reformation": {
+    "source": "favicon",
+    "domain": "thereformation.com",
+    "logoPath": "/company-logos/reformation.png"
+  },
+  "Filson": {
+    "source": "favicon",
+    "domain": "filson.com",
+    "logoPath": "/company-logos/filson.png"
+  },
+  "Bridgewater": {
+    "source": "favicon",
+    "domain": "bridgewater.com",
+    "logoPath": "/company-logos/bridgewater.png"
+  },
+  "Graham Capital": {
+    "source": "favicon",
+    "domain": "grahamcapital.com",
+    "logoPath": "/company-logos/grahamcapital.png"
+  },
+  "Viking Global": {
+    "source": "favicon",
+    "domain": "vikingglobal.com",
+    "logoPath": "/company-logos/vikingglobal.png"
+  },
+  "Garda Capital": {
+    "source": "favicon",
+    "domain": "gardacp.com",
+    "logoPath": "/company-logos/gardacapital.png"
+  },
+  "Gelber Group": {
+    "source": "favicon",
+    "domain": "gelbergroup.com",
+    "logoPath": "/company-logos/gelbergroup.png"
+  },
+  "Mako": {
+    "source": "favicon",
+    "domain": "mako.com",
+    "logoPath": "/company-logos/mako.png"
+  },
+  "Qube RT": {
+    "source": "favicon",
+    "domain": "qube-rt.com",
+    "logoPath": "/company-logos/qubert.png"
+  },
+  "Walleye Capital": {
+    "source": "favicon",
+    "domain": "walleyecapital.com",
+    "logoPath": "/company-logos/walleyecapital.png"
+  },
+  "Headlands Technologies": {
+    "source": "favicon",
+    "domain": "headlandstech.com",
+    "logoPath": "/company-logos/headlandstechnologies.png"
+  },
+  "Marshall Wace": {
+    "source": "favicon",
+    "domain": "mwam.com",
+    "logoPath": "/company-logos/marshallwace.png"
+  },
+  "Magnetar": {
+    "source": "favicon",
+    "domain": "magnetar.com",
+    "logoPath": "/company-logos/magnetar.png"
+  },
+  "Winton": {
+    "source": "favicon",
+    "domain": "winton.com",
+    "logoPath": "/company-logos/winton.png"
+  },
+  "Galaxy Digital": {
+    "source": "favicon",
+    "domain": "galaxy.com",
+    "logoPath": "/company-logos/galaxydigital.png"
+  },
+  "FalconX": {
+    "source": "favicon",
+    "domain": "falconx.io",
+    "logoPath": "/company-logos/falconx.png"
+  },
+  "GSR": {
+    "source": "favicon",
+    "domain": "gsr.io",
+    "logoPath": "/company-logos/gsr.png"
+  },
+  "Flowdesk": {
+    "source": "favicon",
+    "domain": "flowdesk.co",
+    "logoPath": "/company-logos/flowdesk.png"
+  },
+  "B2C2": {
+    "source": "favicon",
+    "domain": "b2c2.com",
+    "logoPath": "/company-logos/b2c2.png"
+  },
+  "Jump Crypto": {
+    "source": "favicon",
+    "domain": "jumpcrypto.com",
+    "logoPath": "/company-logos/jumpcrypto.png"
+  },
+  "Anchorage Digital": {
+    "source": "favicon",
+    "domain": "anchorage.com",
+    "logoPath": "/company-logos/anchoragedigital.png"
+  },
+  "Away": {
+    "source": "favicon",
+    "domain": "awaytravel.com",
+    "logoPath": "/company-logos/away.png"
+  },
+  "Rothy's": {
+    "source": "favicon",
+    "domain": "rothys.com",
+    "logoPath": "/company-logos/rothys.png"
+  },
+  "Keyrock": {
+    "source": "favicon",
+    "domain": "keyrock.com",
+    "logoPath": "/company-logos/keyrock.png"
   }
 }

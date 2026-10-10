@@ -842,5 +842,117 @@
   "F5": {
     "domain": "f5.com",
     "logoPath": "/company-logos/f5.png"
+  },
+  "Nike": {
+    "domain": "nike.com",
+    "logoPath": "/company-logos/nike.png"
+  },
+  "Stitch Fix": {
+    "domain": "stitchfix.com",
+    "logoPath": "/company-logos/stitchfix.png"
+  },
+  "Faire": {
+    "domain": "faire.com",
+    "logoPath": "/company-logos/faire.png"
+  },
+  "Quince": {
+    "domain": "onequince.com",
+    "logoPath": "/company-logos/quince.png"
+  },
+  "Reformation": {
+    "domain": "thereformation.com",
+    "logoPath": "/company-logos/reformation.png"
+  },
+  "Filson": {
+    "domain": "filson.com",
+    "logoPath": "/company-logos/filson.png"
+  },
+  "Bridgewater": {
+    "domain": "bridgewater.com",
+    "logoPath": "/company-logos/bridgewater.png"
+  },
+  "Graham Capital": {
+    "domain": "grahamcapital.com",
+    "logoPath": "/company-logos/grahamcapital.png"
+  },
+  "Viking Global": {
+    "domain": "vikingglobal.com",
+    "logoPath": "/company-logos/vikingglobal.png"
+  },
+  "Garda Capital": {
+    "domain": "gardacp.com",
+    "logoPath": "/company-logos/gardacapital.png"
+  },
+  "Gelber Group": {
+    "domain": "gelbergroup.com",
+    "logoPath": "/company-logos/gelbergroup.png"
+  },
+  "Mako": {
+    "domain": "mako.com",
+    "logoPath": "/company-logos/mako.png"
+  },
+  "Qube RT": {
+    "domain": "qube-rt.com",
+    "logoPath": "/company-logos/qubert.png"
+  },
+  "Walleye Capital": {
+    "domain": "walleyecapital.com",
+    "logoPath": "/company-logos/walleyecapital.png"
+  },
+  "Headlands Technologies": {
+    "domain": "headlandstech.com",
+    "logoPath": "/company-logos/headlandstechnologies.png"
+  },
+  "Marshall Wace": {
+    "domain": "mwam.com",
+    "logoPath": "/company-logos/marshallwace.png"
+  },
+  "Magnetar": {
+    "domain": "magnetar.com",
+    "logoPath": "/company-logos/magnetar.png"
+  },
+  "Winton": {
+    "domain": "winton.com",
+    "logoPath": "/company-logos/winton.png"
+  },
+  "Galaxy Digital": {
+    "domain": "galaxy.com",
+    "logoPath": "/company-logos/galaxydigital.png"
+  },
+  "FalconX": {
+    "domain": "falconx.io",
+    "logoPath": "/company-logos/falconx.png"
+  },
+  "GSR": {
+    "domain": "gsr.io",
+    "logoPath": "/company-logos/gsr.png"
+  },
+  "Flowdesk": {
+    "domain": "flowdesk.co",
+    "logoPath": "/company-logos/flowdesk.png"
+  },
+  "B2C2": {
+    "domain": "b2c2.com",
+    "logoPath": "/company-logos/b2c2.png"
+  },
+  "Jump Crypto": {
+    "domain": "jumpcrypto.com",
+    "logoPath": "/company-logos/jumpcrypto.png"
+  },
+  "Anchorage Digital": {
+    "domain": "anchorage.com",
+    "logoPath": "/company-logos/anchoragedigital.png"
+  },
+  "Away": {
+    "domain": "awaytravel.com",
+    "logoPath": "/company-logos/away.png"
+  },
+  "Rothy's": {
+    "domain": "rothys.com",
+    "logoPath": "/company-logos/rothys.png"
+  },
+  "Keyrock": {
+    "domain": "keyrock.com",
+    "logoPath": "/company-logos/keyrock.png"
   }
 }
