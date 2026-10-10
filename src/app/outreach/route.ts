@@ -95,28 +95,45 @@ async function readContacts(): Promise<Contact[]> {
   return JSON.parse(await new Response(result.stream).text()) as Contact[];
 }
 
-export async function GET(request: Request) {
-  if (!isSignedIn(request)) return loginForm();
-  const listed = (await readContacts()).filter((contact) => !contact.dropped);
-  // Companies keep their priority order; inside each one: replied, waiting on a reply, bounced, not sent yet,
-  // and within each of those, the best role fit first.
-  const companies = [...new Set(listed.map((contact) => contact.company))];
+// The companies Gemma is writing to right now; everyone else sits in the collapsed "On hold" list.
+const currentCompanies = ["Voleon", "Starbucks", "Nordstrom"];
+
+// Companies keep their priority order; inside each one: replied, waiting on a reply, bounced, not sent yet,
+// and within each of those, the best role fit first. Each company opens with a heading row as a break.
+function contactTable(contacts: Contact[]) {
+  const companies = [...new Set(contacts.map((contact) => contact.company))];
   const stage = (contact: Contact) => (contact.repliedAt ? 0 : contact.bouncedAt ? 2 : contact.sentAt ? 1 : 3);
-  const contacts = [...listed].sort((a, b) => companies.indexOf(a.company) - companies.indexOf(b.company) || stage(a) - stage(b) || (a.fit?.rank ?? 99) - (b.fit?.rank ?? 99));
-  const rows = contacts.map((contact, index) => `<tr style="background:${companyColors[contact.company] ?? "#fff"}">
+  const rows = companies.map((company) => {
+    const people = contacts.filter((contact) => contact.company === company)
+      .sort((a, b) => stage(a) - stage(b) || (a.fit?.rank ?? 99) - (b.fit?.rank ?? 99));
+    const heading = `<tr><td colspan="8" style="border:none;padding:22px 8px 6px"><b style="font-size:16px">${escape(company)}</b> <small>${people.length} people</small></td></tr>`;
+    return heading + people.map((contact, index) => `<tr style="background:${companyColors[company] ?? "#fff"}">
 <td>${index + 1}</td>
-<td><a href="${escape(contact.linkedin)}" target="_blank" rel="noreferrer">${escape(contact.name)}</a><br><small>${escape(contact.title)}</small></td>
-<td>${escape(contact.company)}<br><small>${escape(contact.location)}</small></td>
-<td><b>${escape(contact.hook)}</b><br><small>${escape(contact.why)}</small>${contact.fit ? `<br><small>fit #${contact.fit.rank} · ${escape(contact.fit.function)}${contact.fit.open.length ? ` · open: ${escape(contact.fit.open.join("; "))}` : ""}</small>` : ""}</td>
-<td>${(contact.emails ?? []).map((email) => `${email.role === "skip" ? `<s>${escape(email.email)}</s>` : escape(email.email)}<br><small>${escape([email.role?.toUpperCase(), email.type, email.grade, email.source, email.note].filter(Boolean).join(" · "))}</small>`).join("<br>")}</td>
+<td><a href="${escape(contact.linkedin)}" target="_blank" rel="noreferrer">${escape(contact.name)}</a><br><small>${escape(contact.title)} · ${escape(contact.location)}</small></td>
+<td><b>${escape(contact.hook)}</b>${contact.fit ? `<br><small>fit #${contact.fit.rank} · ${escape(contact.fit.function)}</small>` : ""}</td>
+<td>${(contact.emails ?? []).filter((email) => email.role !== "skip").map((email) => `${escape(email.email)}<br><small>${escape([email.role?.toUpperCase(), email.source].filter(Boolean).join(" · "))}</small>`).join("<br>")}</td>
 <td style="text-align:center">${contact.sentAt ? `✅<br><small>${escape(contact.sentAt)}</small>` : ""}</td>
 <td style="text-align:center">${contact.repliedAt ? `✅<br><small>${escape(contact.repliedAt)}</small>` : contact.sentAt ? `❌${contact.bouncedAt ? "" : `<br><small>follow up ${followUpDate(contact.sentAt)}</small>`}` : ""}</td>
 <td style="text-align:center">${contact.bouncedAt ? `bounced<br><small>${escape(contact.bouncedAt)}</small>` : ""}</td>
-<td>${contact.draft ? `<details><summary>${escape(contact.draft.subject)}</summary><pre style="white-space:pre-wrap;font:inherit">${escape(contact.draft.body)}</pre></details>` : ""}<small>${escape(contact.status ?? "")}</small></td>
+<td><small>${escape(contact.status ?? "")}</small></td>
 </tr>`).join("");
+  }).join("");
+  return `<table><thead><tr><th>#</th><th>Person</th><th>Hook</th><th>Email</th><th>Email sent</th><th>Replied</th><th>Bounce back</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+export async function GET(request: Request) {
+  if (!isSignedIn(request)) return loginForm();
+  const listed = (await readContacts()).filter((contact) => !contact.dropped);
+  const current = currentCompanies.flatMap((company) => listed.filter((contact) => contact.company === company));
+  const onHold = listed.filter((contact) => !currentCompanies.includes(contact.company));
+  const onHoldCompanies = [...new Set(onHold.map((contact) => contact.company))];
   return page(`<h1>Outreach for Gemma</h1>
-${dashboard(contacts)}
-<table><thead><tr><th>#</th><th>Person</th><th>Company</th><th>Hook</th><th>Emails found</th><th>Email sent</th><th>Replied</th><th>Bounce back</th><th>Draft</th></tr></thead><tbody>${rows}</tbody></table>`);
+${dashboard([...current, ...onHold])}
+<h2>Current outbound</h2>
+${contactTable(current)}
+<details style="margin-top:40px"><summary style="cursor:pointer;font-size:18px;font-weight:600">On hold <small>${onHold.length} people · ${escape(onHoldCompanies.join(", "))}</small></summary>
+${contactTable(onHold)}
+</details>`);
 }
 
 export async function POST(request: Request) {
