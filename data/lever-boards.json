@@ -62,5 +62,13 @@
     "boardUrl": "https://jobs.lever.co/outreach",
     "apiUrl": "https://api.lever.co/v0/postings/outreach?mode=json",
     "lastVerifiedJobCount": 28
+  },
+  {
+    "company": "Anchorage Digital",
+    "token": "anchorage",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://jobs.lever.co/anchorage",
+    "apiUrl": "https://api.lever.co/v0/postings/anchorage?mode=json",
+    "lastVerifiedJobCount": 22
   }
 ]

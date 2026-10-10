@@ -918,5 +918,29 @@
     "boardUrl": "https://jobs.ashbyhq.com/qumulo",
     "apiUrl": "https://api.ashbyhq.com/posting-api/job-board/qumulo",
     "lastVerifiedJobCount": 23
+  },
+  {
+    "company": "Away",
+    "token": "away",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://jobs.ashbyhq.com/away",
+    "apiUrl": "https://api.ashbyhq.com/posting-api/job-board/away",
+    "lastVerifiedJobCount": 31
+  },
+  {
+    "company": "Rothy's",
+    "token": "rothys",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://jobs.ashbyhq.com/rothys",
+    "apiUrl": "https://api.ashbyhq.com/posting-api/job-board/rothys",
+    "lastVerifiedJobCount": 89
+  },
+  {
+    "company": "Keyrock",
+    "token": "keyrock",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://jobs.ashbyhq.com/keyrock",
+    "apiUrl": "https://api.ashbyhq.com/posting-api/job-board/keyrock",
+    "lastVerifiedJobCount": 10
   }
 ]

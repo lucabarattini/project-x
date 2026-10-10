@@ -574,5 +574,189 @@
     "boardUrl": "https://job-boards.greenhouse.io/offerup",
     "apiUrl": "https://boards-api.greenhouse.io/v1/boards/offerup/jobs?content=true",
     "lastVerifiedJobCount": 7
+  },
+  {
+    "company": "Stitch Fix",
+    "token": "stitchfix",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/stitchfix",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/stitchfix/jobs?content=true",
+    "lastVerifiedJobCount": 15
+  },
+  {
+    "company": "Faire",
+    "token": "faire",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/faire",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/faire/jobs?content=true",
+    "lastVerifiedJobCount": 81
+  },
+  {
+    "company": "Quince",
+    "token": "quince",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/quince",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/quince/jobs?content=true",
+    "lastVerifiedJobCount": 151
+  },
+  {
+    "company": "Reformation",
+    "token": "reformation",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/reformation",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/reformation/jobs?content=true",
+    "lastVerifiedJobCount": 159
+  },
+  {
+    "company": "Filson",
+    "token": "filson",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/filson",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/filson/jobs?content=true",
+    "lastVerifiedJobCount": 14
+  },
+  {
+    "company": "Bridgewater",
+    "token": "bridgewater89",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/bridgewater89",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/bridgewater89/jobs?content=true",
+    "lastVerifiedJobCount": 18
+  },
+  {
+    "company": "Graham Capital",
+    "token": "grahamcapitalmanagement",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/grahamcapitalmanagement",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/grahamcapitalmanagement/jobs?content=true",
+    "lastVerifiedJobCount": 11
+  },
+  {
+    "company": "Viking Global",
+    "token": "vikingglobalinvestors",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/vikingglobalinvestors",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/vikingglobalinvestors/jobs?content=true",
+    "lastVerifiedJobCount": 6
+  },
+  {
+    "company": "Garda Capital",
+    "token": "gardacp",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/gardacp",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/gardacp/jobs?content=true",
+    "lastVerifiedJobCount": 14
+  },
+  {
+    "company": "Gelber Group",
+    "token": "gelbergroup",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/gelbergroup",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/gelbergroup/jobs?content=true",
+    "lastVerifiedJobCount": 11
+  },
+  {
+    "company": "Mako",
+    "token": "mako",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/mako",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/mako/jobs?content=true",
+    "lastVerifiedJobCount": 5
+  },
+  {
+    "company": "Qube RT",
+    "token": "quberesearchandtechnologies",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/quberesearchandtechnologies",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/quberesearchandtechnologies/jobs?content=true",
+    "lastVerifiedJobCount": 193
+  },
+  {
+    "company": "Walleye Capital",
+    "token": "walleyecapital-external-fulltime",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/walleyecapital-external-fulltime",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/walleyecapital-external-fulltime/jobs?content=true",
+    "lastVerifiedJobCount": 12
+  },
+  {
+    "company": "Headlands Technologies",
+    "token": "headlandstechnologiesllc",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/headlandstechnologiesllc",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/headlandstechnologiesllc/jobs?content=true",
+    "lastVerifiedJobCount": 8
+  },
+  {
+    "company": "Marshall Wace",
+    "token": "marshallwace",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/marshallwace",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/marshallwace/jobs?content=true",
+    "lastVerifiedJobCount": 1
+  },
+  {
+    "company": "Magnetar",
+    "token": "magnetar",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/magnetar",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/magnetar/jobs?content=true",
+    "lastVerifiedJobCount": 2
+  },
+  {
+    "company": "Winton",
+    "token": "winton",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/winton",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/winton/jobs?content=true",
+    "lastVerifiedJobCount": 8
+  },
+  {
+    "company": "Galaxy Digital",
+    "token": "galaxydigitalservices",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/galaxydigitalservices",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/galaxydigitalservices/jobs?content=true",
+    "lastVerifiedJobCount": 42
+  },
+  {
+    "company": "FalconX",
+    "token": "falconx",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/falconx",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/falconx/jobs?content=true",
+    "lastVerifiedJobCount": 17
+  },
+  {
+    "company": "GSR",
+    "token": "gsrmarkets",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/gsrmarkets",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/gsrmarkets/jobs?content=true",
+    "lastVerifiedJobCount": 6
+  },
+  {
+    "company": "Flowdesk",
+    "token": "flowdesk",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/flowdesk",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/flowdesk/jobs?content=true",
+    "lastVerifiedJobCount": 4
+  },
+  {
+    "company": "B2C2",
+    "token": "b2c2",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/b2c2",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/b2c2/jobs?content=true",
+    "lastVerifiedJobCount": 3
+  },
+  {
+    "company": "Jump Crypto",
+    "token": "jumpcrypto",
+    "source": "project-x-search-2026-10-10,ats-probe",
+    "boardUrl": "https://job-boards.greenhouse.io/jumpcrypto",
+    "apiUrl": "https://boards-api.greenhouse.io/v1/boards/jumpcrypto/jobs?content=true",
+    "lastVerifiedJobCount": 4
   }
 ]

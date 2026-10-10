@@ -55,6 +55,9 @@ const hedgeFundCompanies = new Set([
   "Susquehanna International Group", "TGS Management", "Tower Research Capital",
   "TransMarket Group", "Valkyrie Trading", "Vatic Labs", "VivCourt", "Virtu Financial",
   "Voleon", "Voloridge", "WorldQuant", "XTX Markets", "Xantium",
+  "B2C2", "Bridgewater", "FalconX", "Flowdesk", "Galaxy Digital", "Garda Capital", "Gelber Group",
+  "Graham Capital", "GSR", "Headlands Technologies", "Jump Crypto", "Keyrock", "Magnetar", "Mako",
+  "Marshall Wace", "Qube RT", "Viking Global", "Walleye Capital", "Winton",
 ]);
 
 const nonTechnicalFamilyIds: Record<NonTechnicalFamily, string> = {

@@ -75,5 +75,21 @@
         "6150e291faa30123a8f15f16659ae804"
       ]
     }
+  },
+  {
+    "company": "Nike",
+    "token": "nike/nke",
+    "source": "project-x-search-2026-10-10,ats-probe,official-careers-page,workday-cxs,west-coast-facet",
+    "boardUrl": "https://nike.wd1.myworkdayjobs.com/en-US/nke",
+    "apiUrl": "https://nike.wd1.myworkdayjobs.com/wday/cxs/nike/nke/jobs",
+    "detailUrlBase": "https://nike.wd1.myworkdayjobs.com/wday/cxs/nike/nke",
+    "lastVerifiedJobCount": 152,
+    "appliedFacets": {
+      "locations": [
+        "53aa8f3ea4191001f60e8d141cd70000",
+        "53aa8f3ea4191001f60f6328ef7b0000",
+        "53aa8f3ea4191001f60d6c97a8a10000"
+      ]
+    }
   }
 ]
