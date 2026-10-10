@@ -328,9 +328,10 @@
     "logoPath": "/company-logos/physicalintelligence.png"
   },
   "Point72": {
-    "source": "favicon",
+    "source": "manual",
     "domain": "point72.com",
-    "logoPath": "/company-logos/point72.png"
+    "logoPath": "/company-logos/point72.png",
+    "manualPath": "/company-logos/manual/point72.png"
   },
   "Quadrature Capital": {
     "source": "favicon",
@@ -849,9 +850,10 @@
     "logoPath": "/company-logos/antares.png"
   },
   "Dyna Robotics": {
-    "source": "favicon",
+    "source": "manual",
     "domain": "dyna.co",
-    "logoPath": "/company-logos/dynarobotics.png"
+    "logoPath": "/company-logos/dynarobotics.png",
+    "manualPath": "/company-logos/manual/dynarobotics.png"
   },
   "Sunday": {
     "source": "favicon",
