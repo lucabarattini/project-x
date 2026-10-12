@@ -98,6 +98,17 @@ async function readContacts(): Promise<Contact[]> {
 // The companies Gemma is writing to right now; everyone else sits in the collapsed "On hold" list.
 const currentCompanies = ["Voleon", "Starbucks", "Nordstrom"];
 
+// The openings each current company is being contacted about, shown under its heading.
+const targetRoles: Record<string, Array<[title: string, url: string]>> = {
+  Voleon: [["Tax Associate (remote, 1 yr)", "https://jobs.ashbyhq.com/voleon/8bcefe9b-6061-4951-96c5-eb9dec3994a1"]],
+  Starbucks: [
+    ["Supply Planner, Global Supply Chain", "https://apply.starbucks.com/careers/job/481080986214"],
+    ["Logistics Network Analyst", "https://apply.starbucks.com/careers/job/481080977555"],
+    ["Director, Planning & Business Operations", "https://apply.starbucks.com/careers/job/481080977556"],
+  ],
+  Nordstrom: [["Sr. Financial Analyst x3 (Corporate FP&A, Stores, Store Ops)", "https://nordstrom.wd501.myworkdayjobs.com/en-US/nordstrom_careers/job/Seattle-WA/Sr-Financial-Analyst---6-Open-Roles-----Hybrid---Seattle--WA-_R-832987"]],
+};
+
 // Companies keep their priority order; inside each one: replied, waiting on a reply, bounced, not sent yet,
 // and within each of those, the best role fit first. Each company opens with a heading row as a break.
 function contactTable(contacts: Contact[]) {
@@ -106,7 +117,9 @@ function contactTable(contacts: Contact[]) {
   const rows = companies.map((company) => {
     const people = contacts.filter((contact) => contact.company === company)
       .sort((a, b) => stage(a) - stage(b) || (a.fit?.rank ?? 99) - (b.fit?.rank ?? 99));
-    const heading = `<tr><td colspan="8" style="border:none;padding:22px 8px 6px"><b style="font-size:16px">${escape(company)}</b> <small>${people.length} people</small></td></tr>`;
+    const drafted = people.filter((contact) => contact.status?.startsWith("in Gmail drafts")).length;
+    const roles = (targetRoles[company] ?? []).map(([title, url]) => `<a href="${escape(url)}" target="_blank" rel="noreferrer">${escape(title)}</a>`).join(" · ");
+    const heading = `<tr><td colspan="8" style="border:none;padding:22px 8px 6px"><b style="font-size:16px">${escape(company)}</b> <small>${people.length} people${drafted ? ` · ${drafted} in Gmail drafts` : ""}</small>${roles ? `<br><small>Openings: ${roles}</small>` : ""}</td></tr>`;
     return heading + people.map((contact, index) => `<tr style="background:${companyColors[company] ?? "#fff"}">
 <td>${index + 1}</td>
 <td><a href="${escape(contact.linkedin)}" target="_blank" rel="noreferrer">${escape(contact.name)}</a><br><small>${escape(contact.title)} · ${escape(contact.location)}</small></td>
