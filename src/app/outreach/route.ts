@@ -97,7 +97,7 @@ async function readContacts(): Promise<Contact[]> {
 }
 
 // The companies Gemma is writing to right now; everyone else sits in the collapsed "On hold" list.
-const currentCompanies = ["Voleon", "Starbucks", "Nordstrom"];
+const currentCompanies = ["Voleon", "Starbucks", "Nordstrom", "DoorDash", "Expedia"];
 
 // The openings each current company is being contacted about, shown under its heading.
 const targetRoles: Record<string, Array<[title: string, url: string]>> = {
@@ -108,6 +108,8 @@ const targetRoles: Record<string, Array<[title: string, url: string]>> = {
     ["Director, Planning & Business Operations", "https://apply.starbucks.com/careers/job/481080977556"],
   ],
   Nordstrom: [["Sr. Financial Analyst x3 (Corporate FP&A, Stores, Store Ops)", "https://nordstrom.wd501.myworkdayjobs.com/en-US/nordstrom_careers/job/Seattle-WA/Sr-Financial-Analyst---6-Open-Roles-----Hybrid---Seattle--WA-_R-832987"]],
+  DoorDash: [["Associate, Finance & Strategy - DashPass (1-3+ yrs, Seattle among locations)", "https://job-boards.greenhouse.io/doordashusa/jobs/8278668"]],
+  Expedia: [["Treasury Analyst, Banking Infrastructure (Seattle, 3+ yrs)", "https://careers.expediagroup.com/job/treasury-analyst-banking-infrastructure/seattle-wa/R-110518/"]],
 };
 
 // Companies keep their priority order; inside each one: replied, waiting on a reply, bounced, not sent yet,
