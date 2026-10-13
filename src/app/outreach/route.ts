@@ -34,6 +34,7 @@ type Contact = {
   sentAt?: string;
   repliedAt?: string;
   bouncedAt?: string;
+  followedUpAt?: string;
   dropped?: string;
   // How close the role is to Gemma's path, ranked within the company (1 = write first).
   fit?: { rank: number; function: string; open: string[] };
@@ -81,12 +82,12 @@ function dashboard(contacts: Contact[]) {
       list.length,
       list.filter((contact) => contact.emails?.some((email) => email.role !== "skip")).length,
       list.filter((contact) => contact.status?.startsWith("in Gmail drafts")).length,
-      sent, replied, bounced, percent(replied, sent - bounced),
+      sent, list.filter((contact) => contact.followedUpAt).length, replied, bounced, percent(replied, sent - bounced),
     ];
     const style = company === "All" ? "font-weight:600" : `background:${companyColors[company] ?? "#fff"}`;
     return `<tr style="${style}"><td>${escape(company)}</td>${cells.map((cell) => `<td>${cell}</td>`).join("")}</tr>`;
   });
-  return `<table style="width:auto;margin-bottom:24px"><thead><tr><th>Company</th><th>People</th><th>Usable email</th><th>In drafts</th><th>Sent</th><th>Replied</th><th>Bounced</th><th>Reply rate</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+  return `<table style="width:auto;margin-bottom:24px"><thead><tr><th>Company</th><th>People</th><th>Usable email</th><th>In drafts</th><th>Sent</th><th>Followed up</th><th>Replied</th><th>Bounced</th><th>Reply rate</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
 }
 
 async function readContacts(): Promise<Contact[]> {
@@ -126,7 +127,7 @@ function contactTable(contacts: Contact[]) {
 <td><b>${escape(contact.hook)}</b>${contact.fit ? `<br><small>fit #${contact.fit.rank} · ${escape(contact.fit.function)}</small>` : ""}</td>
 <td>${(contact.emails ?? []).filter((email) => email.role !== "skip").map((email) => `${escape(email.email)}<br><small>${escape([email.role?.toUpperCase(), email.source].filter(Boolean).join(" · "))}</small>`).join("<br>")}</td>
 <td style="text-align:center">${contact.sentAt ? `✅<br><small>${escape(contact.sentAt)}</small>` : ""}</td>
-<td style="text-align:center">${contact.repliedAt ? `✅<br><small>${escape(contact.repliedAt)}</small>` : contact.sentAt ? `❌${contact.bouncedAt ? "" : `<br><small>follow up ${followUpDate(contact.sentAt)}</small>`}` : ""}</td>
+<td style="text-align:center">${contact.repliedAt ? `✅<br><small>${escape(contact.repliedAt)}</small>` : contact.sentAt ? `❌${contact.bouncedAt ? "" : contact.followedUpAt ? `<br><small>followed up ${escape(contact.followedUpAt)}</small>` : `<br><small>follow up ${followUpDate(contact.sentAt)}</small>`}` : ""}</td>
 <td style="text-align:center">${contact.bouncedAt ? `bounced<br><small>${escape(contact.bouncedAt)}</small>` : ""}</td>
 <td><small>${escape(contact.status ?? "")}</small></td>
 </tr>`).join("");
