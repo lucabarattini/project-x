@@ -15,6 +15,7 @@ const cookieName = "outreach";
 const companyColors: Record<string, string> = {
   DRW: "#fde2e2", Stripe: "#e4e1fb", Shopify: "#ddf3df", Coinbase: "#dbe8fb", Nordstrom: "#efefef",
   Starbucks: "#d8efe6", Microsoft: "#fff1d6", DoorDash: "#ffe3d6", Amazon: "#fff7cc", Voleon: "#e2f4f6", Expedia: "#e7eefb",
+  Crusoe: "#f3e8fb",
 };
 const contactsPath = "outreach/contacts.json";
 
@@ -97,7 +98,7 @@ async function readContacts(): Promise<Contact[]> {
 }
 
 // The companies Gemma is writing to right now; everyone else sits in the collapsed "On hold" list.
-const currentCompanies = ["Voleon", "Starbucks", "Nordstrom", "DoorDash", "Expedia"];
+const currentCompanies = ["Voleon", "Starbucks", "Nordstrom", "DoorDash", "Expedia", "Crusoe"];
 
 // The openings each current company is being contacted about, shown under its heading.
 const targetRoles: Record<string, Array<[title: string, url: string]>> = {
@@ -110,6 +111,7 @@ const targetRoles: Record<string, Array<[title: string, url: string]>> = {
   Nordstrom: [["Sr. Financial Analyst x3 (Corporate FP&A, Stores, Store Ops)", "https://nordstrom.wd501.myworkdayjobs.com/en-US/nordstrom_careers/job/Seattle-WA/Sr-Financial-Analyst---6-Open-Roles-----Hybrid---Seattle--WA-_R-832987"]],
   DoorDash: [["Associate, Finance & Strategy - DashPass (1-3+ yrs, Seattle among locations)", "https://job-boards.greenhouse.io/doordashusa/jobs/8278668"]],
   Expedia: [["Treasury Analyst, Banking Infrastructure (Seattle, 3+ yrs)", "https://careers.expediagroup.com/job/treasury-analyst-banking-infrastructure/seattle-wa/R-110518/"]],
+  Crusoe: [["Senior Financial Analyst, Central Finance (Bellevue, on-site, 2-4 yrs; applied)", "https://jobs.ashbyhq.com/crusoe/62a01e46-9571-45b6-9205-13db16c4327f"]],
 };
 
 // Companies keep their priority order; inside each one: replied, waiting on a reply, bounced, not sent yet,
