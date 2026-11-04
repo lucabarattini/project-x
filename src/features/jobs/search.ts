@@ -282,10 +282,13 @@ function matchesPortal(
   const internship = internshipTitlePattern.test(entry.job.title);
   if (portal === "internships") return internship;
   if (internship) return false;
-  if (portal === "non-tech") {
-    return entry.nonTechFamily !== null && families.includes(entry.nonTechFamily);
-  }
-  return matchesRoleTypes(entry, roleTypes);
+  // A posting belongs to exactly one portal. An unclassified title with a real
+  // family is non-tech; with only "Other" there is nothing to go on, so it
+  // stays in the technical Needs Review bucket.
+  const family = entry.nonTechFamily;
+  const nonTech = family !== null && !(entry.category === "Needs Review" && family === "Other");
+  if (portal === "non-tech") return nonTech && families.includes(family);
+  return !nonTech && matchesRoleTypes(entry, roleTypes);
 }
 
 function compareEntries(

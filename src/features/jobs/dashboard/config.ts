@@ -7,7 +7,7 @@ import {
 import type { DateFilter } from "../filters";
 
 export const roleTracks: RoleTypeFilter[] = [
-  ...technicalTrackOptions(),
+  ...technicalTrackOptions().filter((track) => track !== "Operations & Support" && track !== "Non-Technical"),
   "Needs Review",
 ];
 
@@ -16,9 +16,7 @@ export const defaultRoleTracks = roleTracks.filter(
     track !== "Robotics" &&
     track !== "Software Engineering" &&
     track !== "Security Engineering" &&
-    track !== "Manual & Field Operations" &&
-    track !== "Operations & Support" &&
-    track !== "Non-Technical",
+    track !== "Manual & Field Operations",
 );
 
 export const defaultExperienceFilters: ExperienceFilter[] = [

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { GreenhouseJob } from "./providers/greenhouse";
+import { nonTechnicalFamilyOptions } from "./display";
 import { buildSearchEntry } from "./search-model";
 import {
   defaultSearchParams,
@@ -216,6 +217,19 @@ test("data analysts are technical and stay off the non-tech portal", () => {
 
   const nonTech = searchJobs(data, { ...defaultSearchParams, date: "all", portal: "non-tech" });
   assert.equal(nonTech.total, 0, "data analyst stays off the non-tech portal");
+});
+
+test("a posting never appears on both portals", () => {
+  const data = entries([
+    job({ id: "1", title: "Finance Lead" }),
+    job({ id: "2", title: "Capacity Delivery Lead" }),
+    job({ id: "3", title: "Software Engineer" }),
+  ]);
+  const wide = { ...defaultSearchParams, date: "all" as const, experience: ["all" as const], limit: 50 };
+  const ids = (portal: "tech" | "non-tech") => searchJobs(data, { ...wide, portal, roleTypes: ["all"], families: [...nonTechnicalFamilyOptions] }).jobs.map((item) => item.id);
+  const nonTech = ids("non-tech");
+  assert.deepEqual(ids("tech").filter((id) => nonTech.includes(id)), []);
+  assert.equal(ids("tech").length + nonTech.length, 3);
 });
 
 test("selecting a European city overrides the U.S.-only country default", () => {
