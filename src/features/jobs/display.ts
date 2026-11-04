@@ -27,6 +27,7 @@ export type TechnicalTrack =
   | "Data Science"
   | "Analytics & Business Intelligence"
   | "Forward Deployed"
+  | "Technical Program Management"
   | "Software Engineering"
   | "Hardware & Embedded Engineering"
   | "Data Engineering"
@@ -136,12 +137,22 @@ const technicalFamilies: Array<{
   },
   {
     category: "Forward Deployed",
-    reason: "Matched forward deployed engineering or data science title.",
+    reason: "Matched forward deployed, solutions or sales engineering title.",
     patterns: [
       /\bforward deployed engineer\b/iu,
       /\bforward deployed software engineer\b/iu,
       /\bforward deployed data scientist\b/iu,
       /\bFDE\b/iu,
+      /\bsolutions? engineer\b/iu,
+      /\bsales engineer\b/iu,
+    ],
+  },
+  {
+    category: "Technical Program Management",
+    reason: "Matched technical program manager title.",
+    patterns: [
+      /\btechnical program manager\b/iu,
+      /\bTPM\b/u,
     ],
   },
   {
@@ -364,12 +375,9 @@ const excludedDefaultTitlePatterns = [
   /\bVP\b/u,
   /\bvice president\b/iu,
   /\bhead\b/iu,
-  /\btechnical program manager\b/iu,
-  /\bTPM\b/u,
   /\btechnical support\b/iu,
   /\bhelp desk\b/iu,
   /\bIT technician\b/iu,
-  /\bsales engineer\b/iu,
   /\bsolutions consultant\b/iu,
   /\bsenior\b/iu,
   /\bsr\.?\b/iu,
@@ -592,7 +600,19 @@ export function compactExperienceEvidence(text: string) {
 }
 
 export function classifyTechnicalRole(title: string): TechnicalClassification {
-  for (const pattern of excludedDefaultTitlePatterns.slice(0, 12)) {
+  // Technical whatever else the title says: "Program Manager" would otherwise be excluded below.
+  for (const family of technicalFamilies) {
+    if (family.category !== "Forward Deployed" && family.category !== "Technical Program Management") continue;
+    if (family.patterns.some((pattern) => pattern.test(title))) {
+      return {
+        matchedCategory: family.category,
+        matchReason: family.reason,
+        includedByDefault: !hasSeniorOrManagerSignal(title),
+      };
+    }
+  }
+
+  for (const pattern of excludedDefaultTitlePatterns.slice(0, 9)) {
     if (pattern.test(title)) {
       return {
         matchedCategory: "Needs Review",
@@ -624,7 +644,7 @@ export function technicalTrackOptions() {
 }
 
 export function hasSeniorOrManagerSignal(title: string) {
-  return excludedDefaultTitlePatterns.slice(12).some((pattern) => pattern.test(title)) ||
+  return excludedDefaultTitlePatterns.slice(9).some((pattern) => pattern.test(title)) ||
     excludedDefaultTitlePatterns.slice(0, 6).some((pattern) => pattern.test(title));
 }
 

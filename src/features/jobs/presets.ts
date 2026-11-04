@@ -30,7 +30,3 @@ export const searchPresets: SearchPreset[] = [
     url: "https://jobs.apple.com/en-us/search?location=united-states-USA+seattle-metro-area-SEAT+san-francisco-bay-area-SFMETRO+cupertino-CUP+seattle-SEA+washington-state1000+california-state953&team=video-media-and-audio-technologies-SFTWR-VMAT+environment-and-social-initiatives-CORSV-ENSI+finance-CORSV-FIN+global-security-CORSV-GLSEC+information-systems-and-technology-CORSV-IT+people-CORSV-HR+places-CORSV-REFAC+policy-and-government-affairs-CORSV-GOV+account-management-SLDEV-CC+advertising-sales-SLDEV-AS+apple-channel-store-sales-SLDEV-CRC+business-development-SLDEV-BUSDEV+e-commerce-SLDEV-ARS+field-engineering-SLDEV-FSE+retail-experience-and-operations-SLDEV-REO+sales-and-planning-operations-SLDEV-SO+business-process-re-engineering-CUST-BPE+business-insights-operations-and-systems-CUST-BIOS+channel-management-CUST-SCMO+supply-chain-operations-CUST-SCO+corporate-STDNT-CORP+corporate-communications-MKTG-CRPCM+developer-relations-MKTG-DR+events-and-experiences-MKTG-EE+marketing-communications-MKTG-MKTCM+product-marketing-MKTG-PM+retail-engagement-marketing-and-merchandising-MKTG-REMM+services-marketing-MKTG-SVCM",
   },
 ];
-
-export function findPreset(id: string | null) {
-  return searchPresets.find((preset) => preset.id === id) ?? null;
-}

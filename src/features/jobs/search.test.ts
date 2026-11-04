@@ -3,7 +3,6 @@ import { test } from "node:test";
 import type { GreenhouseJob } from "./providers/greenhouse";
 import { buildSearchEntry } from "./search-model";
 import {
-  decodeCursor,
   defaultSearchParams,
   parseSearchParams,
   searchJobs,
@@ -56,10 +55,9 @@ test("parseSearchParams reads comma lists and short track ids", () => {
 });
 
 test("parseSearchParams ignores unknown values", () => {
-  const params = parseSearchParams({ date: "nonsense", country: "eu", limit: "999", tracks: "bogus" });
-  assert.equal(params.date, "today");
+  const params = parseSearchParams({ date: "nonsense", country: "eu", tracks: "bogus" });
+  assert.equal(params.date, "week");
   assert.equal(params.country, "us");
-  assert.equal(params.limit, 50);
   assert.deepEqual(params.roleTypes, defaultSearchParams.roleTypes);
 });
 
@@ -111,25 +109,24 @@ test("results are slim: never leak contentText to the client", () => {
   assert.ok(result.jobs[0].badgeLabel);
 });
 
-test("pagination returns one page with an opaque cursor", () => {
+test("the limit caps the rows shown, not the total", () => {
   const data = entries(
     Array.from({ length: 7 }, (_, index) =>
       job({ id: String(index), title: `Software Engineer ${index}` }),
     ),
   );
   const params = { ...defaultSearchParams, limit: 3, date: "all", roleTypes: ["all"] };
-  const first = searchJobs(data, params, 0);
+  const first = searchJobs(data, params);
   assert.equal(first.jobs.length, 3);
   assert.equal(first.total, 7);
-  assert.ok(first.nextCursor);
+  assert.equal(searchJobs(data, { ...params, limit: 28 }).jobs.length, 7);
+});
 
-  const second = searchJobs(data, params, decodeCursor(first.nextCursor));
-  assert.equal(second.jobs.length, 3);
-  assert.notEqual(second.jobs[0].id, first.jobs[0].id);
-
-  const third = searchJobs(data, params, decodeCursor(second.nextCursor));
-  assert.equal(third.jobs.length, 1);
-  assert.equal(third.nextCursor, null);
+test("a saved view expands to its filters and the address keeps commas readable", () => {
+  const params = parseSearchParams({ view: "gemma" });
+  assert.equal(params.portal, "non-tech");
+  assert.deepEqual(params.experience, ["early", "not_stated"]);
+  assert.equal(serializeSearchParams({ ...defaultSearchParams, locations: ["Seattle", "Miami"] }), "?loc=Seattle,Miami");
 });
 
 test("company filter composes with role type and experience filters", () => {
@@ -210,7 +207,7 @@ test("operational and business noise is hidden with default filters", () => {
   assert.equal(withOps.total, 4, "every role surfaces when all tracks are enabled");
 });
 
-test("data analysts surface on both the tech and non-tech portals", () => {
+test("data analysts are technical and stay off the non-tech portal", () => {
   const data = entries([
     job({ id: "1", title: "Data Analyst", company: "Alpha", location: "New York, NY, United States" }),
   ]);
@@ -218,8 +215,7 @@ test("data analysts surface on both the tech and non-tech portals", () => {
   assert.equal(tech.total, 1, "data analyst appears on the tech portal");
 
   const nonTech = searchJobs(data, { ...defaultSearchParams, date: "all", portal: "non-tech" });
-  assert.equal(nonTech.total, 1, "data analyst appears on the non-tech portal");
-  assert.equal(nonTech.jobs[0].nonTechFamily, "Analytics & Strategy");
+  assert.equal(nonTech.total, 0, "data analyst stays off the non-tech portal");
 });
 
 test("selecting a European city overrides the U.S.-only country default", () => {

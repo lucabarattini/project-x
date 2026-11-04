@@ -1,9 +1,5 @@
-import { unstable_cache } from "next/cache";
+import { recentWindowMs } from "./board-store";
 import { describeFailures, takeBoardFailures } from "./providers/concurrency";
-import { after } from "next/server";
-import { gunzipSync, gzipSync } from "node:zlib";
-import { get, head, put } from "@vercel/blob";
-import { findPreset } from "./presets";
 import { resolvePresets } from "./preset-sources";
 import { compactExperienceEvidence } from "./display";
 import { amazonBoards, fetchLatestAmazonJobs } from "./providers/amazon";
@@ -28,13 +24,14 @@ import {
 } from "./providers/custom-careers";
 import {
   buildSearchEntry,
-  mergeSearchEntries,
+  fromIndexRow,
+  rowKey,
+  toIndexRow,
+  type IndexRow,
   type JobSearchEntry,
-  type SearchJob,
 } from "./search-model";
 
 export type JobBoard = GreenhouseBoard;
-export type Job = SearchJob;
 
 export const jobBoards: JobBoard[] = [
   ...greenhouseBoards,
@@ -59,36 +56,31 @@ export type ProviderDiagnostic = {
   message: string | null;
 };
 
-export type JobSnapshot = {
-  entries: JobSearchEntry[];
+/** The file the browser loads: every posting as a compact row. */
+export type Board = {
   fetchedAt: string;
   diagnostics: ProviderDiagnostic[];
-  /** Each saved search's postings, resolved with the snapshot (see presets.ts). */
-  presets?: Record<string, JobSearchEntry[]>;
+  rows: IndexRow[];
+  /** Each saved search's postings, resolved with the board (see presets.ts). */
+  presets: Record<string, IndexRow[]>;
 };
 
-type FetchJobsOptions = {
-  amazonLimit?: number;
-  googleLimit?: number;
-  googlePages?: number;
-  greenhouseDetailLimit?: number;
+/** What the judge reads about a posting; the board itself carries no descriptions. */
+export type RecentPosting = {
+  key: string;
+  title: string;
+  company: string;
+  location: string;
+  postedAt: string;
+  text: string;
 };
 
 /**
- * Serverless (Vercel) builds run on cloud IPs that the ATS APIs throttle
- * harder than home/office IPs, inside a function with a short wall-clock
- * limit. The snapshot rebuilds less often there (fewer request bursts) and
- * the Greenhouse detail enrichment is cut in half (its 41-board + 120-detail
- * fan-out is the main rate-limit trigger).
+ * Builds run on GitHub's cloud IPs, which the ATS APIs throttle harder than a
+ * home connection, and Greenhouse's detail enrichment is the main rate-limit
+ * trigger, so it stays capped.
  */
-const isServerless = process.env.VERCEL === "1";
-// 30 min on Vercel keeps rebuilds, each one Blob write, under the Hobby
-// plan's 2,000 writes a month (48 a day at most); past that Blob is shut off
-// for 30 days.
-const snapshotRevalidateSeconds = isServerless ? 1800 : 300;
-const greenhouseDetailLimit = isServerless ? 60 : 120;
-
-const snapshotTtlMs = snapshotRevalidateSeconds * 1000;
+const greenhouseDetailLimit = 60;
 
 type ProviderRun = {
   provider: string;
@@ -154,13 +146,13 @@ async function runProvider(run: ProviderRun) {
   }
 }
 
-function buildProviders(options: FetchJobsOptions): ProviderRun[] {
+function buildProviders(): ProviderRun[] {
   return [
     {
       provider: "greenhouse",
       tokens: greenhouseBoards.map((board) => board.token),
       timeoutMs: 100_000,
-      run: () => fetchLatestGreenhouseJobs({ detailLimit: options.greenhouseDetailLimit ?? greenhouseDetailLimit }),
+      run: () => fetchLatestGreenhouseJobs({ detailLimit: greenhouseDetailLimit }),
     },
     {
       provider: "ashby",
@@ -227,16 +219,13 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
       provider: "amazon",
       tokens: amazonBoards.map((board) => board.token),
       timeoutMs: 30_000,
-      run: () => fetchLatestAmazonJobs({ maxJobs: options.amazonLimit ?? 600 }),
+      run: () => fetchLatestAmazonJobs({ maxJobs: 600 }),
     },
     {
       provider: "google",
       tokens: googleBoards.map((board) => board.token),
       timeoutMs: 60_000,
-      run: () => fetchLatestGoogleJobs({
-        maxJobs: options.googleLimit ?? 400,
-        maxPages: options.googlePages ?? 12,
-      }),
+      run: () => fetchLatestGoogleJobs({ maxJobs: 400, maxPages: 12 }),
     },
     {
       provider: "custom",
@@ -248,10 +237,6 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
 }
 
 /**
- * Fetches and normalizes the full snapshot. Expensive (all providers), so it
- * runs at most once per process and is persisted as small chunks below.
- */
-/**
  * The same opening under several requisition ids: Apple posts "CPU
  * Implementation Engineer, Austin" eight times, Amazon a data-center role six.
  * On the board they are one row each, so one company + title + location is
@@ -261,20 +246,25 @@ function postingKey(job: { company: string; title: string; location: string }) {
   return `posting:${job.company}|${job.title.trim().toLowerCase()}|${job.location}`;
 }
 
-async function buildSnapshotInternal(): Promise<JobSnapshot> {
-  const providers = buildProviders({});
+/**
+ * Fetches every source and normalizes the result. Runs outside Vercel, in
+ * scripts/build-board.mts: this is the work that used up the Hobby CPU limit.
+ */
+export async function buildBoard(previous: Board | null): Promise<{ board: Board; recent: RecentPosting[] }> {
+  const providers = buildProviders();
   const results = await Promise.all(providers.map(runProvider));
+  const previousEntries = (previous?.rows ?? []).map((row) => fromIndexRow(row));
 
   // Apple, Microsoft and Meta refuse datacenter IPs now and then, and a slow
   // board can still miss its budget. Their postings used to vanish from the
-  // board until the next build; the previous snapshot's copy is kept instead,
-  // and the diagnostic says so. A 404 board is gone and is not kept.
+  // board until the next build; the previous board's copy is kept instead, and
+  // the diagnostic says so. A 404 board is gone and is not kept.
   const carried: JobSearchEntry[] = [];
   results.forEach((result, index) => {
     const providerFailed = result.diagnostic.status === "error" || result.diagnostic.status === "timeout";
     const tokens = new Set(providerFailed ? providers[index].tokens : []);
     const companies = new Set(result.failedBoards);
-    const kept = (shared.snapshot?.entries ?? []).filter(
+    const kept = previousEntries.filter(
       (entry) => tokens.has(entry.job.boardToken) || companies.has(entry.job.company),
     );
     if (kept.length === 0) return;
@@ -296,27 +286,43 @@ async function buildSnapshotInternal(): Promise<JobSnapshot> {
       if (keys.some((key) => seen.has(key))) return false;
       for (const key of keys) seen.add(key);
       return true;
-    })
-    .map((job) => ({
-      ...job,
-      contentText: compactExperienceEvidence(job.contentText),
-    }));
+    });
 
-  const entries = [...jobs.map(buildSearchEntry), ...carried.filter((entry) => {
-    const key = postingKey(entry.job);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  })];
+  const entries = [
+    ...jobs.map((job) => buildSearchEntry({ ...job, contentText: compactExperienceEvidence(job.contentText) })),
+    ...carried.filter((entry) => {
+      const key = postingKey(entry.job);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }),
+  ];
+
+  const previousPresets = previous && Object.fromEntries(
+    Object.entries(previous.presets).map(([id, rows]) => [id, rows.map((row) => fromIndexRow(row))]),
+  );
+  const presets = await withTimeout(resolvePresets(entries, previousPresets ?? undefined), 25_000)
+    .catch(() => previousPresets ?? {});
+
+  const fetchedAt = new Date().toISOString();
+  const oldest = Date.parse(fetchedAt) - recentWindowMs;
   return {
-    entries,
-    fetchedAt: new Date().toISOString(),
-    diagnostics: results.map((result) => result.diagnostic),
-    // Capped so the build still lands inside the function's limit: uncapped,
-    // Apple's pages and detail reads pushed it past the limit, the function
-    // was killed before storing, and every visit served a snapshot hours old.
-    presets: await withTimeout(resolvePresets(entries, shared.snapshot?.presets), 25_000)
-      .catch(() => shared.snapshot?.presets),
+    board: {
+      fetchedAt,
+      diagnostics: results.map((result) => result.diagnostic),
+      rows: entries.map(toIndexRow),
+      presets: Object.fromEntries(Object.entries(presets).map(([id, list]) => [id, list.map(toIndexRow)])),
+    },
+    recent: jobs.flatMap((job) => (job.postedAt && Date.parse(job.postedAt) >= oldest
+      ? [{
+        key: rowKey(job),
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        postedAt: job.postedAt,
+        text: job.contentText.replace(/\s+/gu, " ").slice(0, 1200),
+      }]
+      : [])),
   };
 }
 
@@ -327,21 +333,12 @@ async function buildSnapshotInternal(): Promise<JobSnapshot> {
  * revalidation can be suspended mid-flight, which delays every provider's
  * timeout timer and leaves the whole snapshot near-empty.
  *
- * Persisting one of those serves a hollowed-out board for a full TTL and
- * re-poisons the cache on each rebuild attempted while the condition lasts, so
- * the build is rejected and the caller keeps serving the last real snapshot.
- * The diagnostics ride along so the UI can still say which sources failed.
+ * Publishing one of those would replace the board with a hollowed-out copy, so
+ * the build is rejected and the last real board stays up.
  *
  * The bar is deliberately low: half the sources failing outright is already far
  * outside normal, where one or two empty boards are routine.
  */
-class UnusableSnapshotError extends Error {
-  constructor(readonly snapshot: JobSnapshot, reason: string) {
-    super(`JOB_SNAPSHOT_UNUSABLE: ${reason}`);
-    this.name = "UnusableSnapshotError";
-  }
-}
-
 export function snapshotRejectionReason(
   entryCount: number,
   diagnostics: ProviderDiagnostic[],
@@ -366,270 +363,4 @@ export function snapshotRejectionReason(
     return `${entryCount} entries against ${previousEntryCount} in the last good build`;
   }
   return null;
-}
-
-async function buildVerifiedSnapshot(): Promise<JobSnapshot> {
-  const snapshot = await buildSnapshotInternal();
-  const reason = snapshotRejectionReason(
-    snapshot.entries.length,
-    snapshot.diagnostics,
-    shared.lastGoodEntryCount,
-  );
-  if (reason) {
-    shared.unusableRebuildAt = Date.now();
-    throw new UnusableSnapshotError(snapshot, reason);
-  }
-  shared.lastGoodEntryCount = snapshot.entries.length;
-  shared.unusableRebuildAt = 0;
-  return snapshot;
-}
-
-type SnapshotState = {
-  /** The snapshot this process serves. */
-  snapshot: JobSnapshot | null;
-  /**
-   * Entry count of the last snapshot known to be real. The guard above compares
-   * a fresh build against it, so it is refreshed both from a successful build and
-   * from the stored snapshot — a cold instance that has never built anything
-   * still knows how big the board is supposed to be.
-   */
-  lastGoodEntryCount: number;
-  /**
-   * When a rebuild comes back unusable, stop attempting another one on every
-   * request. The sources that refused us keep refusing for a while, each attempt
-   * costs a full eleven-provider fan-out, and the visitor waits through all of it
-   * only to be served the fallback anyway.
-   */
-  unusableRebuildAt: number;
-  build: Promise<JobSnapshot> | null;
-  refresh: Promise<void> | null;
-  /**
-   * The cold-start read of the stored snapshot, shared like the build: the
-   * startup hook and the first request both arrive here, and a second read
-   * sent with the first one's etag gets a 304, finds nothing yet, and blocks
-   * on a full rebuild.
-   */
-  load: Promise<JobSnapshot | null> | null;
-  blobEtag: string | undefined;
-};
-
-/**
- * One snapshot and at most one build per server process. Next bundles the page,
- * each route handler and the startup hook separately, and every bundle gets its
- * own copy of this module: with plain module variables each one kept its own
- * snapshot and started its own full rebuild, so a cold local server ran two or
- * three fan-outs at once over one connection and healthy sources timed out
- * (9 of 13 on the page, 11 of 13 for the API's build minutes later). The state
- * therefore lives on globalThis, which all the bundles share.
- */
-const shared = ((globalThis as typeof globalThis & { __jobSnapshotState?: SnapshotState }).__jobSnapshotState ??= {
-  snapshot: null,
-  lastGoodEntryCount: 0,
-  unusableRebuildAt: 0,
-  build: null,
-  refresh: null,
-  load: null,
-  blobEtag: undefined,
-});
-
-const rebuildRetryCooldownMs = 2 * 60 * 1000;
-
-function ensureSnapshotBuild(): Promise<JobSnapshot> {
-  if (!shared.build) {
-    shared.build = buildVerifiedSnapshot().finally(() => {
-      shared.build = null;
-    });
-  }
-  return shared.build;
-}
-
-/**
- * The last good snapshot, kept in Vercel Blob so it outlives both instances
- * and deployments. The Next.js data cache did neither on Vercel: every deploy
- * started empty, and its first visitors waited out a ~45 s rebuild each. One
- * gzipped object overwritten in place, so the store only ever holds one
- * snapshot (a few MB of the 1 GB plan) however often it is written.
- */
-const snapshotBlobPath = "snapshot/latest.json.gz";
-
-/** The stored snapshot, or null when there is none, it is the copy this instance already holds, or no store is configured (local dev). */
-async function readStoredSnapshot(): Promise<JobSnapshot | null> {
-  try {
-    const result = await get(snapshotBlobPath, {
-      access: "private",
-      useCache: false,
-      ifNoneMatch: shared.blobEtag,
-    });
-    if (result?.statusCode !== 200) return null;
-    shared.blobEtag = result.blob.etag;
-    const gzipped = Buffer.from(await new Response(result.stream).arrayBuffer());
-    const snapshot = JSON.parse(gunzipSync(gzipped).toString("utf8")) as JobSnapshot;
-    shared.lastGoodEntryCount = Math.max(shared.lastGoodEntryCount, snapshot.entries.length);
-    return snapshot;
-  } catch {
-    return null;
-  }
-}
-
-async function storeSnapshot(snapshot: JobSnapshot) {
-  try {
-    const result = await put(snapshotBlobPath, gzipSync(JSON.stringify(snapshot)), {
-      access: "private",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: "application/gzip",
-    });
-    shared.blobEtag = result.etag;
-  } catch {
-    // Persisting is best-effort; this instance still serves the new board.
-  }
-}
-
-function isFresh(snapshot: JobSnapshot) {
-  return Date.now() - Date.parse(snapshot.fetchedAt) < snapshotTtlMs;
-}
-
-/**
- * Never makes a visitor wait for the providers while any real board exists:
- * a cold instance reads the stored snapshot (~1 s), and a stale one is served
- * as-is while it refreshes after the response. Only a store that has never
- * been written blocks on a build.
- */
-export async function getSnapshot(): Promise<JobSnapshot> {
-  if (shared.snapshot && isFresh(shared.snapshot)) {
-    return shared.snapshot;
-  }
-  if (!shared.snapshot) {
-    shared.load ??= readStoredSnapshot().finally(() => {
-      shared.load = null;
-    });
-    shared.snapshot ??= await shared.load;
-  }
-  if (!shared.snapshot) {
-    return rebuildSnapshot(null);
-  }
-  if (Date.now() - shared.unusableRebuildAt >= rebuildRetryCooldownMs) {
-    refreshAfterResponse();
-  }
-  return shared.snapshot;
-}
-
-function refreshAfterResponse() {
-  shared.refresh ??= refreshSnapshot()
-    .catch(() => undefined)
-    .finally(() => {
-      shared.refresh = null;
-    });
-  const pending = shared.refresh;
-  try {
-    after(() => pending);
-  } catch {
-    // Outside a request (the startup warm-up) there is no response to wait for.
-  }
-}
-
-/**
- * Another instance may have rebuilt already: adopt its snapshot when fresh,
- * fan out to the providers only when not. head() reads only the metadata, so
- * checking costs no download of the 2.7 MB snapshot (Hobby includes 10 GB).
- */
-async function refreshSnapshot() {
-  const stored = await head(snapshotBlobPath).catch(() => null);
-  if (stored && stored.etag !== shared.blobEtag && Date.now() - stored.uploadedAt.getTime() < snapshotTtlMs) {
-    const snapshot = await readStoredSnapshot();
-    if (snapshot && isFresh(snapshot)) {
-      shared.snapshot = snapshot;
-      return;
-    }
-  }
-  await rebuildSnapshot(shared.snapshot);
-}
-
-/**
- * Rebuilds, promotes the result to the module copy and stores it. When the
- * rebuild is unusable the last real snapshot is served instead, however old it
- * is: the openings in it were real, and a board that has lost most of its
- * sources is not more honest for being fresh. Nothing is stored, so a later
- * request can still pick up a healthy build.
- *
- * The fresh diagnostics ride along on the fallback, so the dashboard reports
- * which sources are down right now rather than how they looked when the
- * snapshot it is showing was built.
- */
-async function rebuildSnapshot(fallback: JobSnapshot | null): Promise<JobSnapshot> {
-  try {
-    const snapshot = await ensureSnapshotBuild();
-    shared.snapshot = snapshot;
-    shared.unusableRebuildAt = 0;
-    await storeSnapshot(snapshot);
-    return snapshot;
-  } catch (error) {
-    if (!(error instanceof UnusableSnapshotError)) {
-      throw error;
-    }
-    shared.unusableRebuildAt = Date.now();
-    const previous = fallback ?? shared.snapshot;
-    if (previous) {
-      return { ...previous, diagnostics: error.snapshot.diagnostics };
-    }
-    // Nothing real has ever been built on this instance: report the failure
-    // honestly rather than rendering an empty board as if it were a result.
-    return error.snapshot;
-  }
-}
-
-/**
- * Live Amazon ATS keyword results, normalized into search entries and cached
- * for the same 300 s as the snapshot. Amazon's public search endpoint holds
- * 10k+ U.S. jobs, so the recency-window snapshot alone can never cover
- * role-specific searches (e.g. "financial analyst" in Seattle); querying the
- * same `base_query` the careers site uses closes that gap.
- */
-const getAmazonLiveEntries = unstable_cache(
-  async (query: string): Promise<JobSearchEntry[]> => {
-    try {
-      const jobs = await fetchLatestAmazonJobs({ query, maxJobs: 150 });
-      return jobs.map(buildSearchEntry);
-    } catch {
-      // Live search is best-effort; fall back to the snapshot-only feed.
-      return [];
-    }
-  },
-  ["amazon-live-query-v1"],
-  { revalidate: snapshotRevalidateSeconds },
-);
-
-/**
- * Search pool for one request: the cached snapshot plus, when a keyword is
- * present, live Amazon ATS hits for that keyword. Location/date/experience/
- * portal filtering still happens in searchJobs, so a "financial analyst" +
- * Seattle search now sees the same roles Amazon's own ATS shows.
- */
-/**
- * The entries a search runs over: a preset's postings as its own site listed
- * them when the snapshot was built, otherwise the snapshot plus live Amazon
- * hits for a keyword.
- */
-export async function getSearchEntries(
-  snapshot: JobSnapshot,
-  params: { q: string; preset: string | null },
-): Promise<JobSearchEntry[]> {
-  const preset = findPreset(params.preset);
-  if (!preset) {
-    return getAugmentedEntries(snapshot, params.q);
-  }
-  return snapshot.presets?.[preset.id] ?? [];
-}
-
-export async function getAugmentedEntries(
-  snapshot: JobSnapshot,
-  query: string,
-): Promise<JobSearchEntry[]> {
-  const trimmed = query.trim();
-  if (!trimmed) {
-    return snapshot.entries;
-  }
-
-  const live = await getAmazonLiveEntries(trimmed);
-  return mergeSearchEntries(snapshot.entries, live);
 }

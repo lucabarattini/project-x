@@ -28,7 +28,6 @@ import {
 } from "./search-model";
 
 export const DEFAULT_PAGE_SIZE = 25;
-export const MAX_PAGE_SIZE = 50;
 
 export type PortalId = "tech" | "non-tech" | "internships";
 
@@ -39,10 +38,6 @@ export type PortalId = "tech" | "non-tech" | "internships";
  */
 const internshipTitlePattern =
   /\b(intern|interns|internship|internships|co-?op|summer (analyst|associate)|apprentice(ship)?)\b/iu;
-
-export function isInternshipTitle(title: string) {
-  return internshipTitlePattern.test(title);
-}
 
 /** Hedge funds and trading firms among the tracked companies. */
 const hedgeFundCompanies = new Set([
@@ -100,7 +95,7 @@ export const defaultSearchParams: JobSearchParams = {
   company: null,
   country: "us",
   locations: [],
-  date: "today",
+  date: "week",
   experience: [...defaultExperienceFilters],
   roleTypes: [...defaultRoleTracks],
   families: [...nonTechnicalFamilies],
@@ -120,10 +115,19 @@ const validSortKeys = new Set<JobSortKey>([
 
 export type JobSearchResult = {
   jobs: JobListItem[];
-  nextCursor: string | null;
   total: number;
   companies: number;
-  offset: number;
+};
+
+/** Named filter sets, so a long search has a short address: /?view=gemma. */
+const savedViews: Record<string, Record<string, string>> = {
+  gemma: {
+    portal: "nontech",
+    fam: "finance,analytics",
+    loc: "seattle-area,remote-us",
+    exp: "early,not_stated",
+    date: "2w",
+  },
 };
 
 function firstString(
@@ -139,10 +143,11 @@ function commaList(value: string | string[] | undefined): string[] {
   return raw.flatMap((item) => item.split(",")).map((item) => item.trim()).filter(Boolean);
 }
 
-/** Parse a request searchParams object into typed filters. */
+/** Parse the address bar's query into typed filters. */
 export function parseSearchParams(
-  searchParams: Record<string, string | string[] | undefined>,
+  query: Record<string, string | string[] | undefined>,
 ): JobSearchParams {
+  const searchParams = { ...savedViews[firstString(query.view) ?? ""], ...query };
   const params: JobSearchParams = {
     ...defaultSearchParams,
   };
@@ -192,11 +197,6 @@ export function parseSearchParams(
   const dir = firstString(searchParams.dir);
   if (dir === "asc" || dir === "desc") params.dir = dir;
 
-  const limit = Number(firstString(searchParams.limit) ?? "");
-  if (Number.isFinite(limit) && limit >= 1) {
-    params.limit = Math.min(limit, MAX_PAGE_SIZE);
-  }
-
   return params;
 }
 
@@ -235,7 +235,6 @@ export function serializeSearchParams(params: JobSearchParams): string {
 
   if (params.sort !== defaultSearchParams.sort) url.set("sort", params.sort);
   if (params.dir !== defaultSearchParams.dir) url.set("dir", params.dir);
-  if (params.limit !== defaultSearchParams.limit) url.set("limit", String(params.limit));
 
   if (params.portal !== defaultSearchParams.portal) {
     url.set("portal", params.portal === "non-tech" ? "nontech" : params.portal);
@@ -251,7 +250,8 @@ export function serializeSearchParams(params: JobSearchParams): string {
     url.set("fam", params.families.map((family) => nonTechnicalFamilyIds[family]).join(","));
   }
 
-  const query = url.toString();
+  // Commas are legal in a query; escaped, they make the address unreadable.
+  const query = url.toString().replaceAll("%2C", ",");
   return query ? `?${query}` : "";
 }
 
@@ -261,22 +261,6 @@ const experienceOrder: Record<string, number> = {
   explicit: 2,
   conflicting: 3,
 };
-
-// btoa/atob rather than Buffer: the same search also runs in the browser.
-function encodeCursor(offset: number) {
-  return btoa(`o:${offset}`).replace(/=+$/u, "");
-}
-
-export function decodeCursor(cursor: string | null | undefined): number {
-  if (!cursor) return 0;
-  try {
-    const raw = atob(cursor);
-    const offset = Number(raw.startsWith("o:") ? raw.slice(2) : raw);
-    return Number.isFinite(offset) && offset >= 0 ? Math.floor(offset) : 0;
-  } catch {
-    return 0;
-  }
-}
 
 function matchesKeyword(entry: JobSearchEntry, query: string): boolean {
   if (!query) return true;
@@ -294,7 +278,7 @@ function matchesPortal(
   roleTypes: RoleTypeFilter[],
   families: NonTechnicalFamily[],
 ) {
-  const internship = isInternshipTitle(entry.job.title);
+  const internship = internshipTitlePattern.test(entry.job.title);
   if (portal === "internships") return internship;
   if (internship) return false;
   if (portal === "non-tech") {
@@ -349,7 +333,6 @@ function entryMatchesJobId(entry: JobSearchEntry, query: string) {
 function finalizeSearchResult(
   entries: JobSearchEntry[],
   params: JobSearchParams,
-  cursorOffset: number,
 ): JobSearchResult {
   const sorted = entries.sort((left, right) => {
     const byKey = compareEntries(left, right, params.sort, params.dir);
@@ -357,28 +340,17 @@ function finalizeSearchResult(
     return String(left.job.id).localeCompare(String(right.job.id));
   });
 
-  const offset = Math.min(cursorOffset, sorted.length);
-  const page = sorted.slice(offset, offset + params.limit);
-  const companies = new Set(sorted.map((entry) => entry.job.company)).size;
-  const nextOffset = offset + page.length;
-
   return {
-    jobs: page.map(toJobListItem),
-    nextCursor: nextOffset < sorted.length ? encodeCursor(nextOffset) : null,
+    jobs: sorted.slice(0, params.limit).map(toJobListItem),
     total: sorted.length,
-    companies,
-    offset,
+    companies: new Set(sorted.map((entry) => entry.job.company)).size,
   };
 }
 
-/**
- * Server-side search over the normalized snapshot. Runs on the server only;
- * returns slim items without any provider description text.
- */
+/** Filters and sorts the board in the browser; a run takes well under 100 ms. */
 export function searchJobs(
   entries: JobSearchEntry[],
   params: JobSearchParams,
-  cursorOffset = 0,
   now = new Date(),
 ): JobSearchResult {
   const query = params.q.trim().toLowerCase();
@@ -403,7 +375,7 @@ export function searchJobs(
       return true;
     });
     if (direct.length > 0) {
-      return finalizeSearchResult(direct, params, cursorOffset);
+      return finalizeSearchResult(direct, params);
     }
   }
 
@@ -419,7 +391,6 @@ export function searchJobs(
         params.experience.some((filter) => matchesExperienceFilter(entry.requirement, entry.job.title, filter)),
       ),
       params,
-      cursorOffset,
     );
   }
 
@@ -439,5 +410,5 @@ export function searchJobs(
     );
   });
 
-  return finalizeSearchResult(matched, params, cursorOffset);
+  return finalizeSearchResult(matched, params);
 }

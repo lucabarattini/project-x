@@ -5,14 +5,14 @@ import {
   experienceBadge,
   extractExperienceRequirement,
   hasSeniorOrManagerSignal,
+  nonTechnicalFamilyOptions,
   type ExperienceRequirement,
   type NonTechnicalFamily,
 } from "./display";
 
 /**
  * The job fields the client and the search engine need. Full provider
- * descriptions stay on the server and are never serialized into pages,
- * API responses, or the data cache.
+ * descriptions are never written to the board.
  */
 export type SearchJob = {
   id: number | string;
@@ -26,8 +26,7 @@ export type SearchJob = {
 };
 
 /**
- * The minimal per-job shape sent to the browser. Full provider descriptions
- * stay on the server; the client never receives contentText.
+ * One job as a result row in the dashboard.
  */
 export type JobListItem = SearchJob & {
   category: string;
@@ -51,8 +50,7 @@ export function buildSearchEntry(job: GreenhouseJob): JobSearchEntry {
   const nonTechFamily =
     category === "Non-Technical" ||
     category === "Operations & Support" ||
-    category === "Needs Review" ||
-    category === "Analytics & Business Intelligence"
+    category === "Needs Review"
       ? classifyNonTechnicalRole(job.title)
       : null;
   return {
@@ -116,13 +114,23 @@ export function toIndexRow({ job, category, nonTechFamily, requirement }: JobSea
   ];
 }
 
-/** Rebuilds a search entry from an index row; keyword text covers title, company, location and id only. */
-export function fromIndexRow(row: IndexRow): JobSearchEntry {
-  const [id, title, company, boardToken, location, absoluteUrl, postedAt, updatedAt, category, nonTechFamily, status, minYears, maxYears] = row;
+/** The id the judge's labels are stored under. */
+export function rowKey(job: { boardToken: string; id: number | string }) {
+  return `${job.boardToken}:${job.id}`;
+}
+
+/**
+ * Rebuilds a search entry from an index row; keyword text covers title, company,
+ * location and id only. A judge label overrides what the title rules decided.
+ */
+export function fromIndexRow(row: IndexRow, label?: string): JobSearchEntry {
+  const [id, title, company, boardToken, location, absoluteUrl, postedAt, updatedAt, ruleCategory, ruleFamily, status, minYears, maxYears] = row;
+  const family = nonTechnicalFamilyOptions.find((option) => option === label) ?? null;
+  const category = family ? "Non-Technical" : label || ruleCategory;
   return {
     job: { id, title, company, boardToken, location, absoluteUrl, postedAt, updatedAt },
     category,
-    nonTechFamily,
+    nonTechFamily: label ? family : ruleFamily,
     requirement: { status, effectiveMinYears: minYears, effectiveMaxYears: maxYears, evidence: [] },
     seniorSignal: hasSeniorOrManagerSignal(title),
     searchText: [title, company, location, category, String(id), `amz${id}`].join(" ").toLowerCase(),
@@ -139,40 +147,6 @@ export function toJobListItem(entry: JobSearchEntry): JobListItem {
     badgeLabel: badge.label,
     badgeClass: badge.className,
   };
-}
-
-/**
- * Appends live provider results to a base set without duplicating entries
- * already present (matched by board token + job id, or by absolute URL).
- * Used to layer live Amazon ATS keyword hits on top of the cached snapshot.
- */
-export function mergeSearchEntries(
-  base: JobSearchEntry[],
-  extra: JobSearchEntry[],
-): JobSearchEntry[] {
-  if (extra.length === 0) {
-    return base;
-  }
-
-  const seen = new Set<string>();
-  for (const entry of base) {
-    seen.add(`${entry.job.boardToken}:${entry.job.id}`);
-    seen.add(`url:${entry.job.absoluteUrl}`);
-  }
-
-  const additions: JobSearchEntry[] = [];
-  for (const entry of extra) {
-    const key = `${entry.job.boardToken}:${entry.job.id}`;
-    const urlKey = `url:${entry.job.absoluteUrl}`;
-    if (seen.has(key) || seen.has(urlKey)) {
-      continue;
-    }
-    seen.add(key);
-    seen.add(urlKey);
-    additions.push(entry);
-  }
-
-  return additions.length > 0 ? [...base, ...additions] : base;
 }
 
 export type { ExperienceRequirement };

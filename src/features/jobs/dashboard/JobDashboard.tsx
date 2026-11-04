@@ -1,9 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -17,14 +18,14 @@ import {
 } from "./config";
 import {
   type JobSearchParams,
-  type JobSearchResult,
   type PortalId,
+  DEFAULT_PAGE_SIZE,
   defaultSearchParams,
   pageUrl,
+  parseSearchParams,
   searchJobs,
-  serializeSearchParams,
 } from "../search";
-import { locationFilters, type DateFilter, type JobSortKey } from "../filters";
+import { locationFilters, type JobSortKey } from "../filters";
 import { searchPresets } from "../presets";
 import {
   nonTechnicalFamilies,
@@ -33,20 +34,15 @@ import {
   type NonTechnicalFamily,
   type RoleTypeFilter,
 } from "../display";
-import { fromIndexRow, type IndexRow, type JobListItem, type JobSearchEntry } from "../search-model";
+import { fromIndexRow, rowKey } from "../search-model";
 import type { GreenhouseBoard } from "../providers/greenhouse";
-import type { ProviderDiagnostic } from "../service";
+import type { Board } from "../service";
 
 type Props = {
   boards: Array<Pick<GreenhouseBoard, "company" | "token" | "source" | "boardUrl">>;
-  companyCounts: Array<{ company: string; count: number }>;
-  /** Totals for the next wider date windows, used to widen a near-empty "today" default. */
-  defaultDateCounts?: Array<{ date: DateFilter; total: number }>;
-  initial: JobSearchResult;
-  initialParams: JobSearchParams;
-  snapshotFetchedAt: string;
-  diagnostics: ProviderDiagnostic[];
 };
+
+type JudgeUpdate = { labels: Record<string, string>; remaining: number };
 
 const experienceLabels: Record<string, string> = {
   early: "1–3 Years",
@@ -121,211 +117,149 @@ function SectionCard({ children, className = "" }: { children: ReactNode; classN
   return <div className={`card overflow-hidden ${className}`}>{children}</div>;
 }
 
-/**
- * Whether `url` is still the search the address bar is showing. Every filter
- * change rewrites the URL before it fetches, so the URL is the record of which
- * request is the live one, and a slower earlier response can be dropped
- * without tracking request ids by hand.
- */
-/** Older than the server's own refresh interval on Vercel (30 min). */
-const staleBoardMs = 30 * 60 * 1000;
-
-function isCurrentUrl(url: string) {
-  return `${window.location.pathname}${window.location.search}` === url;
-}
-
-/**
- * Fetches the whole board as compact rows, so filters can run in the browser.
- * `version` (a snapshot's fetchedAt) gets past the CDN's copy of an older one.
- */
-async function loadSearchIndex(version?: string): Promise<JobSearchEntry[] | null> {
-  try {
-    const response = await fetch(version ? `/api/jobs/index?v=${encodeURIComponent(version)}` : "/api/jobs/index");
-    if (!response.ok) return null;
-    const data = await response.json() as { rows: IndexRow[] };
-    return data.rows.map(fromIndexRow);
-  } catch {
-    return null;
-  }
-}
-
-export function JobDashboard({
-  boards,
-  companyCounts,
-  defaultDateCounts = [],
-  initial,
-  initialParams,
-  snapshotFetchedAt,
-  diagnostics,
-}: Props) {
-  const router = useRouter();
-  const [isPending, setIsPending] = useState(false);
-
-  const [params, setParams] = useState<JobSearchParams>(initialParams);
-  const [qDraft, setQDraft] = useState(initialParams.q);
-  const [results, setResults] = useState<JobListItem[]>(initial.jobs);
-  const [nextCursor, setNextCursor] = useState<string | null>(initial.nextCursor);
-  const [total, setTotal] = useState(initial.total);
-  const [companiesInResults, setCompaniesInResults] = useState(initial.companies);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [lastCheckedAt, setLastCheckedAt] = useState<Date>(() => new Date());
-  const [widenedDefault, setWidenedDefault] = useState<{ date: DateFilter; todayCount: number } | null>(null);
-  // The board in the browser once /api/jobs/index arrives. Until then, and for
-  // keyword searches (which also read descriptions and live Amazon hits on the
-  // server), each change is a request to /api/jobs/search.
-  const [searchIndex, setSearchIndex] = useState<JobSearchEntry[] | null>(null);
-  // A newer snapshot noticed by polling, before the page's own props catch up.
-  const [polledFetchedAt, setPolledFetchedAt] = useState<string | null>(null);
-  const shownFetchedAt = polledFetchedAt && Date.parse(polledFetchedAt) > Date.parse(snapshotFetchedAt)
-    ? polledFetchedAt
-    : snapshotFetchedAt;
-
-  /**
-   * Applies a filter change without leaving the page.
-   *
-   * This used to be `router.replace`, which re-runs the server component: it
-   * rebuilds the company counts across every snapshot entry and re-serializes
-   * the whole dashboard — both 94-board source lists included — into a fresh
-   * RSC payload, roughly half a megabyte to swap twenty-five rows. Switching
-   * portals paid that price on every click.
-   *
-   * The results are the only thing that actually changes, and /api/jobs/search
-   * already returns exactly them, so the change is a small JSON fetch and the
-   * URL is kept shareable with a history entry instead of a navigation.
-   */
-  const applySearch = useCallback((next: JobSearchParams) => {
-    setParams(next);
-    const url = pageUrl(next);
-    const query = serializeSearchParams(next);
-    window.history.replaceState(null, "", url);
-    setLoadMoreError(null);
-
-    if (searchIndex && !next.q.trim() && !next.preset) {
-      const local = searchJobs(searchIndex, next, 0);
-      setResults(local.jobs);
-      setNextCursor(local.nextCursor);
-      setTotal(local.total);
-      setCompaniesInResults(local.companies);
-      setIsPending(false);
-      return;
-    }
-
-    setIsPending(true);
-
-    void (async () => {
-      try {
-        const response = await fetch(`/api/jobs/search?${query.replace(/^\?/u, "")}`);
-        if (!response.ok) throw new Error(`Search failed (${response.status})`);
-        const data = await response.json() as JobSearchResult;
-        // A newer click already rewrote the URL: its response is the real one.
-        if (!isCurrentUrl(url)) return;
-        setResults(data.jobs);
-        setNextCursor(data.nextCursor);
-        setTotal(data.total);
-        setCompaniesInResults(data.companies);
-      } catch (error) {
-        if (!isCurrentUrl(url)) return;
-        setLoadMoreError(error instanceof Error ? error.message : "Could not update the results.");
-      } finally {
-        if (isCurrentUrl(url)) setIsPending(false);
-      }
-    })();
-  }, [searchIndex]);
-
-  // Keep local state in sync with the server-rendered result page.
-  // Deferred to the next frame so a navigation never cascades renders
-  // synchronously inside the effect.
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      setParams(initialParams);
-      setQDraft(initialParams.q);
-      setResults(initial.jobs);
-      setNextCursor(initial.nextCursor);
-      setTotal(initial.total);
-      setCompaniesInResults(initial.companies);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [initial, initialParams]);
-
-  // Refreshes the current URL search state every five minutes. The server
-  // snapshot itself only expires through the 300-second data cache.
-  useEffect(() => {
-    void loadSearchIndex().then((entries) => {
-      if (entries) setSearchIndex(entries);
-    });
-    const interval = window.setInterval(() => {
-      setLastCheckedAt(new Date());
-      router.refresh();
-      void loadSearchIndex().then((entries) => {
-        if (entries) setSearchIndex(entries);
-      });
-    }, 5 * 60 * 1000);
-    return () => window.clearInterval(interval);
-  }, [router]);
-
-  // A visit after an idle stretch is served the last stored board at once
-  // while a fresh one is built after the response (~1-2 min). Watch for it
-  // and swap it in here, rather than leaving hours-old postings on screen
-  // until a manual reload.
-  useEffect(() => {
-    if (Date.now() - Date.parse(snapshotFetchedAt) < staleBoardMs) return;
-    let attempts = 0;
-    const interval = window.setInterval(() => {
-      attempts += 1;
-      if (attempts > 12) window.clearInterval(interval);
-      void fetch("/api/jobs/search?limit=1")
-        .then((response) => response.json() as Promise<{ fetchedAt: string }>)
-        .then(({ fetchedAt }) => {
-          if (Date.parse(fetchedAt) <= Date.parse(snapshotFetchedAt)) return;
-          window.clearInterval(interval);
-          setPolledFetchedAt(fetchedAt);
-          setLastCheckedAt(new Date());
-          router.refresh();
-          void loadSearchIndex(fetchedAt).then((entries) => {
-            if (entries) setSearchIndex(entries);
-          });
-        })
-        .catch(() => undefined);
-    }, 20_000);
-    return () => window.clearInterval(interval);
-  }, [router, snapshotFetchedAt]);
-
-  // Debounced keyword search, pushed into the URL so it stays shareable.
-  useEffect(() => {
-    if (qDraft === params.q) return;
-    const id = window.setTimeout(() => {
-      applySearch({ ...params, q: qDraft.trim().slice(0, 200) });
-    }, 350);
-    return () => window.clearTimeout(id);
-  }, [applySearch, qDraft, params]);
-
-  const updateParams = useCallback(
-    (patch: Partial<JobSearchParams>) => {
-      applySearch({ ...params, ...patch });
-    },
-    [applySearch, params],
+function StatItem({
+  icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: IconName;
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="flex items-center gap-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400">
+        <Icon name={icon} className="h-5 w-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-slate-500 dark:text-slate-400">{label}</p>
+        <div className="mt-0.5 flex items-baseline gap-2">
+          <p className="text-xl font-bold tracking-[-0.03em] text-slate-950 dark:text-slate-50">{value}</p>
+          <p className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">{detail}</p>
+        </div>
+      </div>
+    </div>
   );
+}
+
+function BoardSkeleton() {
+  return (
+    <section className="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-6 lg:px-10">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((item) => (
+          <div className="h-[76px] animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" key={item} />
+        ))}
+      </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
+        <div className="hidden h-[560px] animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800 lg:block" />
+        <div className="space-y-3">
+          {[0, 1, 2, 3, 4, 5].map((item) => (
+            <div className="h-24 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" key={item} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The portal is the path, so the address reads /nontech; everything else is the query. */
+function paramsFromAddress() {
+  const query: Record<string, string> = Object.fromEntries(new URLSearchParams(window.location.search));
+  if (window.location.pathname === "/nontech") query.portal = "nontech";
+  if (window.location.pathname === "/internships") query.portal = "internships";
+  return parseSearchParams(query);
+}
+
+async function readJudge(init?: RequestInit) {
+  const response = await fetch("/api/judge", init);
+  if (!response.ok) throw new Error(`Judge returned ${response.status}`);
+  return await response.json() as JudgeUpdate;
+}
+
+function isOverADayOld(value: string) {
+  return Date.now() - Date.parse(value) > 24 * 60 * 60 * 1000;
+}
+
+export function JobDashboard({ boards }: Props) {
+  const [params, setParams] = useState<JobSearchParams>(defaultSearchParams);
+  const [board, setBoard] = useState<Board | null>(null);
+  const [boardMissing, setBoardMissing] = useState(false);
+  const [labels, setLabels] = useState<Record<string, string>>({});
+  const [judging, setJudging] = useState<{ done: number; total: number } | null>(null);
+  const [judgeFailed, setJudgeFailed] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // One load per visit. The judge only runs here, when the site is opened, and
+  // only over recent postings it has not scored yet; the board stays usable
+  // throughout and each batch of labels lands as it comes back.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const response = await fetch("/api/board").catch(() => null);
+      if (cancelled) return;
+      if (!response?.ok) {
+        setBoardMissing(true);
+        return;
+      }
+      const loaded = await response.json() as Board;
+      if (cancelled) return;
+      setParams(paramsFromAddress());
+      setBoard(loaded);
+
+      try {
+        const status = await readJudge();
+        if (cancelled) return;
+        setLabels(status.labels);
+        let remaining = status.remaining;
+        while (remaining > 0 && !cancelled) {
+          setJudging({ done: status.remaining - remaining, total: status.remaining });
+          const step = await readJudge({ method: "POST" });
+          if (Object.keys(step.labels).length === 0) throw new Error("The judge scored nothing");
+          setLabels((current) => ({ ...current, ...step.labels }));
+          remaining = step.remaining;
+        }
+      } catch {
+        setJudgeFailed(true);
+      }
+      setJudging(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Filters live in the address so a search can be shared or bookmarked.
+  useEffect(() => {
+    if (board) window.history.replaceState(null, "", pageUrl(params));
+  }, [board, params]);
+
+  const entries = useMemo(
+    () => (board?.rows ?? []).map((row) => fromIndexRow(row, labels[rowKey({ boardToken: row[3], id: row[0] })])),
+    [board, labels],
+  );
+  const shownParams = useDeferredValue(params);
+  const { jobs: results, total, companies: companiesInResults } = useMemo(() => {
+    const presetRows = shownParams.preset ? board?.presets[shownParams.preset] ?? [] : null;
+    return searchJobs(presetRows ? presetRows.map((row) => fromIndexRow(row)) : entries, shownParams);
+  }, [board, entries, shownParams]);
+
+  const companyCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const entry of entries) counts.set(entry.job.company, (counts.get(entry.job.company) ?? 0) + 1);
+    return [...counts.entries()]
+      .map(([company, count]) => ({ company, count }))
+      .sort((left, right) => left.company.localeCompare(right.company));
+  }, [entries]);
+
+  const updateParams = useCallback((patch: Partial<JobSearchParams>) => {
+    setParams((current) => ({ ...current, limit: DEFAULT_PAGE_SIZE, ...patch }));
+  }, []);
 
   const resetFilters = useCallback(() => {
-    setQDraft("");
-    applySearch({ ...defaultSearchParams });
-  }, [applySearch]);
-
-  // The default "today" window can be nearly empty at some hours. Widen the
-  // date filter once so the page never renders as a dead feed, and say so.
-  useEffect(() => {
-    if (params.date !== "today" || initial.total >= 6) return;
-    if (widenedDefault) return;
-    const candidate = defaultDateCounts.find((item) => item.total >= 6) ?? defaultDateCounts.at(-1);
-    if (!candidate) return;
-    const frame = requestAnimationFrame(() => {
-      setWidenedDefault({ date: candidate.date, todayCount: initial.total });
-      updateParams({ date: candidate.date });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [defaultDateCounts, initial.total, params.date, updateParams, widenedDefault]);
+    setParams({ ...defaultSearchParams });
+  }, []);
 
   function toggleLocation(location: string) {
     const adding = !params.locations.includes(location);
@@ -378,41 +312,21 @@ export function JobDashboard({
 
   function switchPortal(portal: PortalId) {
     if (portal === params.portal) return;
-    const next = {
-      ...params,
+    updateParams({
       portal,
       roleTypes: portal === "tech" ? [...defaultSearchParams.roleTypes] : [],
       families: portal === "non-tech" ? [...nonTechnicalFamilies] : [...defaultSearchParams.families],
-    };
-    applySearch(next);
+    });
   }
 
-  async function loadMore() {
-    if (!nextCursor || isLoadingMore) return;
-    if (searchIndex && !params.q.trim() && !params.preset) {
-      const local = searchJobs(searchIndex, params, results.length);
-      setResults((previous) => [...previous, ...local.jobs]);
-      setNextCursor(local.nextCursor);
-      return;
-    }
-    setIsLoadingMore(true);
-    setLoadMoreError(null);
-    try {
-      const query = serializeSearchParams(params).replace(/^\?/, "");
-      const search = query
-        ? `${query}&cursor=${encodeURIComponent(nextCursor)}`
-        : `cursor=${encodeURIComponent(nextCursor)}`;
-      const response = await fetch(`/api/jobs/search?${search}`);
-      if (!response.ok) throw new Error(`Search failed (${response.status})`);
-      const data = (await response.json()) as JobSearchResult;
-      setResults((previous) => [...previous, ...data.jobs]);
-      setNextCursor(data.nextCursor);
-    } catch (error) {
-      setLoadMoreError(error instanceof Error ? error.message : "Could not load more roles.");
-    } finally {
-      setIsLoadingMore(false);
-    }
+  if (boardMissing) {
+    return (
+      <p className="mx-auto w-full max-w-[1400px] px-4 py-16 text-center text-sm font-semibold text-slate-600 dark:text-slate-400 sm:px-6 lg:px-10">
+        The job board could not be loaded. Try again in a minute.
+      </p>
+    );
   }
+  if (!board) return <BoardSkeleton />;
 
   const allTracksSelected =
     params.roleTypes.filter((track) => track !== "Needs Review").length ===
@@ -438,15 +352,10 @@ export function JobDashboard({
   // "empty" means the source answered but had nothing to list — a board with no
   // current openings is healthy, not down — so only real failures are counted
   // as unavailable. Empty sources are still surfaced, worded for what they are.
-  const providerWarnings = diagnostics.filter((diagnostic) => (
+  const providerWarnings = board.diagnostics.filter((diagnostic) => (
     diagnostic.status === "error" || diagnostic.status === "timeout"
   ));
-  const emptyProviders = diagnostics.filter((diagnostic) => diagnostic.status === "empty");
-
-  // An old board on screen is either the stored one served while a fresh
-  // build runs (the effect above swaps it in), or the fallback kept because
-  // a rebuild was refused. Either way, say how old it is.
-  const servedFromFallback = lastCheckedAt.getTime() - Date.parse(shownFetchedAt) > staleBoardMs;
+  const emptyProviders = board.diagnostics.filter((diagnostic) => diagnostic.status === "empty");
 
   const effectiveCountryLabel =
     params.locations.length > 0 ? "All countries" : params.country === "us" ? "U.S. based" : "All countries";
@@ -661,6 +570,20 @@ export function JobDashboard({
   );
 
   return (
+    <>
+    <section className="mx-auto w-full max-w-[1400px] px-4 pt-6 sm:px-6 lg:px-10">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatItem detail="on the board" icon="briefcase" label="Open roles" value={board.rows.length.toLocaleString("en-US")} />
+        <StatItem detail="career pages" icon="building" label="Companies" value={companyCounts.length.toLocaleString("en-US")} />
+        <StatItem
+          detail={`of ${board.diagnostics.length} sources`}
+          icon="shield"
+          label="Sources healthy"
+          value={String(board.diagnostics.length - providerWarnings.length)}
+        />
+        <StatItem detail={formatExactDate(board.fetchedAt) ?? ""} icon="clock" label="Refreshed" value={formatRelativeDate(board.fetchedAt)} />
+      </div>
+    </section>
     <section id="openings" className="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
       {/* Toolbar */}
       <div className="mb-4 flex flex-col gap-3">
@@ -720,10 +643,10 @@ export function JobDashboard({
               autoComplete="off"
               className="input h-11 pl-10"
               id="job-search"
-              onChange={(event) => setQDraft(event.target.value)}
+              onChange={(event) => updateParams({ q: event.target.value.slice(0, 200) })}
               placeholder={params.portal === "internships" ? "Search internships…" : `Search ${params.portal === "non-tech" ? "non-technical" : ""} roles…`}
               type="search"
-              value={qDraft}
+              value={params.q}
             />
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -792,14 +715,7 @@ export function JobDashboard({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* The count belongs to the results still on screen, so it is stale
-              for the same few hundred milliseconds and must not be read as the
-              answer to the filter just applied. */}
-          <p
-            className={`mr-1 text-sm font-bold text-slate-900 dark:text-slate-100 transition-opacity duration-150 ${
-              isPending ? "opacity-40" : "opacity-100"
-            }`}
-          >
+          <p className="mr-1 text-sm font-bold text-slate-900 dark:text-slate-100">
             {total.toLocaleString("en-US")} roles
             <span className="font-medium text-slate-500 dark:text-slate-400"> · {companiesInResults} companies</span>
           </p>
@@ -949,43 +865,35 @@ export function JobDashboard({
               ))}
             </div>
 
-            {isPending ? (
-              <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center bg-white/60 py-2 backdrop-blur-sm" aria-live="polite">
-                <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-600 dark:text-slate-400 shadow-sm ring-1 ring-slate-200">
-                  <Icon name="refresh" className="h-3.5 w-3.5 animate-spin text-sky-700 dark:text-sky-400" /> Updating results…
-                </span>
+            {judging ? (
+              <div className="border-b border-slate-200 dark:border-slate-700 bg-sky-50 dark:bg-sky-500/15 px-5 py-3" role="status">
+                <p className="flex items-center gap-2 text-xs font-bold text-sky-900 dark:text-sky-300">
+                  <Icon name="sparkle" className="h-4 w-4 animate-pulse" />
+                  The judge is scoring new roles…
+                  <span className="font-semibold">{judging.done.toLocaleString("en-US")} of {judging.total.toLocaleString("en-US")}</span>
+                </p>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sky-100 dark:bg-sky-500/20">
+                  <div
+                    className="h-full animate-pulse rounded-full bg-sky-700 transition-[width] duration-700 dark:bg-sky-400"
+                    style={{ width: `${Math.max(3, (judging.done / judging.total) * 100)}%` }}
+                  />
+                </div>
               </div>
             ) : null}
-
-            {servedFromFallback ? (
-              <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/15 px-4 py-3 text-xs font-semibold leading-5 text-amber-900 dark:text-amber-300">
+            {judgeFailed ? (
+              <p className="flex items-center gap-2 border-b border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/15 px-5 py-3 text-xs font-semibold text-amber-900 dark:text-amber-300">
                 <Icon name="alert-triangle" className="h-4 w-4 shrink-0" />
-                <span>
-                  Showing the board fetched {formatRelativeDate(shownFetchedAt, lastCheckedAt)}
-                  {providerWarnings.length > 0
-                    ? ` — ${providerWarnings.length} source${providerWarnings.length === 1 ? "" : "s"} are refusing us right now`
-                    : " — a fresh one is being collected"}
-                  . This page swaps it in on its own as soon as it is ready, usually within two minutes.
-                </span>
+                The judge stopped early. Unscored roles use the title rules until your next visit.
               </p>
             ) : null}
-            {widenedDefault ? (
-              <p className="mb-3 rounded-xl border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/15 px-4 py-3 text-xs font-semibold leading-5 text-sky-800 dark:text-sky-300">
-                Only {widenedDefault.todayCount} {widenedDefault.todayCount === 1 ? "role" : "roles"} published today — showing the last{" "}
-                {dateFilterOptions.find((option) => option.value === widenedDefault.date)?.label ?? widenedDefault.date} instead.
+            {isOverADayOld(board.fetchedAt) ? (
+              <p className="flex items-center gap-2 border-b border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/15 px-5 py-3 text-xs font-semibold text-amber-900 dark:text-amber-300">
+                <Icon name="alert-triangle" className="h-4 w-4 shrink-0" />
+                This board was built {formatRelativeDate(board.fetchedAt)}. The scheduled build may be failing.
               </p>
             ) : null}
 
-            {/* Filtering is a server round-trip, so the previous page of results
-                stays mounted for a few hundred milliseconds. Rendering it at
-                full strength read as "the filter did nothing" — the rows have
-                to look superseded while the new ones are on their way. */}
-            <div
-              aria-busy={isPending}
-              className={`divide-y divide-slate-100 dark:divide-slate-800 transition-opacity duration-150 ${
-                isPending ? "pointer-events-none opacity-40" : "opacity-100"
-              }`}
-            >
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {results.map((job) => (
                 <article className="group px-4 py-4 transition-colors duration-150 hover:bg-slate-50 dark:hover:bg-slate-800/60 sm:px-5" key={job.id}>
                   <div className="flex items-start gap-3.5">
@@ -1057,16 +965,12 @@ export function JobDashboard({
                 </article>
               ))}
 
-              {results.length === 0 && !isPending ? (
+              {results.length === 0 ? (
                 <div className="px-5 py-16 text-center">
                   <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500">
                     <Icon name="search" className="h-6 w-6" />
                   </span>
-                  <h3 className="mt-5 text-lg font-bold tracking-[-0.03em] text-slate-950 dark:text-slate-50">No roles published today</h3>
-                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">
-                    Most career pages only publish a handful of postings each day, so the default
-                    “today” window is often sparse. Widen the date filter to see this week’s openings.
-                  </p>
+                  <h3 className="mt-5 text-lg font-bold tracking-[-0.03em] text-slate-950 dark:text-slate-50">No roles match these filters</h3>
                   <button className="btn btn-primary mt-5" onClick={resetFilters} type="button">
                     <Icon name="refresh" className="h-4 w-4" /> Reset to defaults
                   </button>
@@ -1075,28 +979,20 @@ export function JobDashboard({
             </div>
 
             <div className="flex flex-col items-center gap-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-5 py-4">
-              {nextCursor ? (
+              {results.length < total ? (
                 <button
                   className="btn btn-secondary w-full sm:w-auto"
-                  disabled={isLoadingMore}
-                  onClick={loadMore}
+                  onClick={() => setParams((current) => ({ ...current, limit: current.limit + DEFAULT_PAGE_SIZE }))}
                   type="button"
                 >
-                  {isLoadingMore ? (
-                    <><Icon name="refresh" className="h-4 w-4 animate-spin" /> Loading…</>
-                  ) : (
-                    <>Load more roles</>
-                  )}
+                  Load more roles
                 </button>
               ) : total > 0 ? (
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">All {total.toLocaleString("en-US")} matching roles shown.</p>
               ) : null}
-              {loadMoreError ? <p className="text-xs font-semibold text-rose-700">{loadMoreError}</p> : null}
 
               <div className="flex flex-col items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:flex-row sm:gap-4">
-                <p>Last checked {formatJobDate(lastCheckedAt.toISOString())}</p>
-                <p className="hidden text-slate-300 sm:inline">·</p>
-                <p>Data fetched at {formatJobDate(shownFetchedAt)}</p>
+                <p>Data fetched at {formatJobDate(board.fetchedAt)}</p>
                 {providerWarnings.length > 0 ? (
                   <>
                     <p className="hidden text-slate-300 sm:inline">·</p>
@@ -1155,5 +1051,6 @@ export function JobDashboard({
         </div>
       </div>
     </section>
+    </>
   );
 }

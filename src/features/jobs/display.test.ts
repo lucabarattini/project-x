@@ -62,10 +62,15 @@ test("classifyTechnicalRole catches every software-engineering title variant", (
 
 test("classifyTechnicalRole excludes commercial, support, and leadership roles from default", () => {
   assert.equal(classifyTechnicalRole("Engineering Manager").matchedCategory, "Needs Review");
-  assert.equal(classifyTechnicalRole("Technical Program Manager").matchedCategory, "Needs Review");
   assert.equal(classifyTechnicalRole("Technical Support Engineer").matchedCategory, "Needs Review");
-  assert.equal(classifyTechnicalRole("Sales Engineer").matchedCategory, "Needs Review");
   assert.equal(classifyTechnicalRole("Solutions Consultant").matchedCategory, "Needs Review");
+});
+
+test("program managers, solutions engineers and data analysts are technical", () => {
+  assert.equal(classifyTechnicalRole("Senior Technical Program Manager").matchedCategory, "Technical Program Management");
+  assert.equal(classifyTechnicalRole("Senior Solution Engineer - AI Workforce").matchedCategory, "Forward Deployed");
+  assert.equal(classifyTechnicalRole("Sales Engineer").matchedCategory, "Forward Deployed");
+  assert.equal(classifyTechnicalRole("Data Analyst").matchedCategory, "Analytics & Business Intelligence");
 });
 
 test("classifyTechnicalRole routes office operations roles to Operations & Support", () => {

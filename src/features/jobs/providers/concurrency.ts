@@ -32,17 +32,17 @@ export async function mapWithinDeadline<T, R>(
 /**
  * Page fan-out is only safe once the board has told us how many rows exist,
  * so every paging provider reads page one first and derives the rest from the
- * reported total. Serverless runs stay on a smaller pool: datacenter IPs draw
- * rate limiting sooner than a laptop does.
+ * reported total. Builds run on datacenter IPs, which draw rate limiting
+ * sooner than a laptop does, so the pool stays small.
  */
-export const pageConcurrency = process.env.VERCEL === "1" ? 8 : 12;
+export const pageConcurrency = 8;
 
 /**
  * Pool for boards that need one request per posting rather than one per page
  * of postings. The work is the same wall-clock budget spread over ~20x more
- * requests, so the pool is wider — but still narrower in serverless.
+ * requests, so the pool is wider.
  */
-export const detailConcurrency = process.env.VERCEL === "1" ? 16 : 24;
+export const detailConcurrency = 16;
 
 /**
  * Collapses per-board results into one list, refusing to pass off a total

@@ -1,0 +1,26 @@
+# Fetches every job source and publishes the board for the site to read.
+# This runs here and not on Vercel because a rebuild costs about 22 CPU-seconds,
+# which is what used up the Hobby plan's 4 CPU-hours a month.
+name: Build job board
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+  push:
+    branches: [static-board]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/build-board.mts
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}

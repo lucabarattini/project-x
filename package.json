@@ -11,7 +11,6 @@
     "generate:logos": "node scripts/generate-company-logos.mjs"
   },
   "dependencies": {
-    "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.8.0",
     "next": "^16.4.2",
     "react": "19.2.8",
