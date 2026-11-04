@@ -101,7 +101,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
   ]);
 }
 
-async function runProvider(run: ProviderRun) {
+async function runProvider(run: ProviderRun): Promise<{ jobs: GreenhouseJob[]; failedBoards: string[]; diagnostic: ProviderDiagnostic }> {
   const startedAt = Date.now();
   try {
     const jobs = await withTimeout(run.run(), run.timeoutMs);
@@ -118,7 +118,7 @@ async function runProvider(run: ProviderRun) {
         provider: run.provider,
         // Providers swallow their own fetch errors and return []. Reporting
         // that as healthy is what let a network outage look like a quiet day.
-        status: jobs.length > 0 ? ("ok" as const) : ("empty" as const),
+        status: jobs.length > 0 ? "ok" : "empty",
         jobCount: jobs.length,
         durationMs: Date.now() - startedAt,
         message: failures.length > 0
@@ -130,10 +130,10 @@ async function runProvider(run: ProviderRun) {
     const timedOut = error instanceof Error && error.message === TIMEOUT_SENTINEL;
     return {
       jobs: [],
-      failedBoards: [] as string[],
+      failedBoards: [],
       diagnostic: {
         provider: run.provider,
-        status: timedOut ? ("timeout" as const) : ("error" as const),
+        status: timedOut ? "timeout" : "error",
         jobCount: 0,
         durationMs: Date.now() - startedAt,
         message: timedOut
@@ -261,12 +261,16 @@ export async function buildBoard(previous: Board | null): Promise<{ board: Board
   // the diagnostic says so. A 404 board is gone and is not kept.
   const carried: JobSearchEntry[] = [];
   results.forEach((result, index) => {
+    const known = previousEntries.filter((entry) => providers[index].tokens.includes(entry.job.boardToken));
+    // Microsoft stops at its first 429, so a throttled run can report ok with
+    // 10 of its 590 postings. Under half of the last count is a cut-off read.
+    if (result.jobs.length > 0 && result.jobs.length * 2 < known.length) {
+      result.diagnostic.status = "error";
+      result.diagnostic.message = `Cut off at ${result.jobs.length} of ${known.length} postings`;
+    }
     const providerFailed = result.diagnostic.status === "error" || result.diagnostic.status === "timeout";
-    const tokens = new Set(providerFailed ? providers[index].tokens : []);
     const companies = new Set(result.failedBoards);
-    const kept = previousEntries.filter(
-      (entry) => tokens.has(entry.job.boardToken) || companies.has(entry.job.company),
-    );
+    const kept = providerFailed ? known : previousEntries.filter((entry) => companies.has(entry.job.company));
     if (kept.length === 0) return;
     carried.push(...kept);
     result.diagnostic.message = `${result.diagnostic.message ?? ""} — kept ${kept.length} postings from the previous build`.trim();
