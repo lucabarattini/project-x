@@ -205,7 +205,7 @@ test("operational and business noise is hidden with default filters", () => {
     roleTypes: ["all"],
     experience: ["all"],
   });
-  assert.equal(withOps.total, 4, "every role surfaces when all tracks are enabled");
+  assert.equal(withOps.total, 3, "every technical-portal role surfaces when all tracks are enabled");
 });
 
 test("data analysts are technical and stay off the non-tech portal", () => {
