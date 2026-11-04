@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { get } from "@vercel/blob";
-import { isSignedIn, sessionToken } from "@/features/outreach/session";
+import { escapeHtml as escape, isSignedIn, reviewPage as page, sessionToken } from "@/features/outreach/session";
 
 /**
  * Private outreach list: the people Gemma is writing to, with their LinkedIn
@@ -43,17 +43,6 @@ type Contact = {
   // Decision makers for the Shopify FP&A push, listed in their own section instead of under Shopify.
   track?: "director" | "recruiter";
 };
-
-function escape(value: string) {
-  return value.replace(/[&<>"']/gu, (char) => `&#${char.charCodeAt(0)};`);
-}
-
-function page(body: string, status = 200, headers: Record<string, string> = {}) {
-  return new Response(
-    `<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Outreach</title><style>body{font:14px system-ui,sans-serif;margin:24px;color:#111}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}th{background:#f5f5f5;position:sticky;top:0}a{color:#0645ad}small{color:#666}</style></head><body>${body}</body></html>`,
-    { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex", ...headers } },
-  );
-}
 
 const loginForm = (error = "") =>
   page(`<form method="post"><p>${error}</p><input type="password" name="password" autofocus> <button>Enter</button></form>`, error ? 401 : 200);

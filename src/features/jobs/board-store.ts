@@ -5,6 +5,7 @@ export const boardPath = "board/board.json.gz";
 export const recentPath = "board/recent.json.gz";
 export const labelsPath = "board/labels.json.gz";
 export const correctionsPath = "board/corrections.json.gz";
+export const judgeStatsPath = "board/judge-stats.json.gz";
 
 /** The judge only reads postings this recent, counted from the visit. */
 export const judgeWindowMs = 14 * 24 * 60 * 60 * 1000;

@@ -644,6 +644,11 @@ export function JobDashboard({ boards }: Props) {
               <Icon name="sparkle" className="h-4 w-4" /> Internships
             </button>
           </div>
+          {signedIn ? (
+            <a className="text-sm font-bold text-sky-700 hover:text-sky-900" href="/judge">
+              Judge report
+            </a>
+          ) : null}
           <p className="text-xs font-medium text-slate-500">
             {params.portal === "internships"
               ? "Internships, co-ops & summer analyst programs"
@@ -935,7 +940,7 @@ export function JobDashboard({ boards }: Props) {
                           <select
                             aria-label={`Correct label for ${job.title}`}
                             autoFocus
-                            className="input h-7 w-auto py-0 text-xs"
+                            className="input h-9 w-auto py-0 text-sm"
                             onBlur={() => setCorrecting(null)}
                             onChange={(event) => void correctLabel(job, event.target.value)}
                             value=""
@@ -945,7 +950,7 @@ export function JobDashboard({ boards }: Props) {
                           </select>
                         ) : signedIn ? (
                           <button
-                            className="text-[11px] font-semibold text-slate-400 transition-colors hover:text-sky-800"
+                            className="inline-flex min-h-9 items-center rounded-lg bg-sky-700 px-3.5 text-sm font-bold text-white transition-colors hover:bg-sky-800"
                             onClick={() => setCorrecting(rowKey(job))}
                             type="button"
                           >

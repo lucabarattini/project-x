@@ -1,5 +1,5 @@
-import { correctionsPath, judgeWindowMs, labelsPath, readStored, recentPath, writeStored } from "./board-store";
-import { judgeLabels } from "./display";
+import { correctionsPath, judgeStatsPath, judgeWindowMs, labelsPath, readStored, recentPath, writeStored } from "./board-store";
+import { judgeLabels, nonTechnicalFamilyOptions } from "./display";
 import { mapWithinDeadline } from "./providers/concurrency";
 import type { RecentPosting } from "./service";
 
@@ -22,9 +22,28 @@ const choices = judgeLabels.map((value) => ({ value, description: notes[value] }
 /** Each example costs about 15 tokens on every posting, so only the newest ones ride along. */
 const maxExamples = 20;
 
-type Labels = Record<string, string>;
+export type Labels = Record<string, string>;
 type Correction = { title: string; company: string; label: string };
-type Corrections = Record<string, Correction>;
+export type Corrections = Record<string, Correction>;
+export type JudgeRun = { at: string; judged: number; failed: number; tokens: number; seconds: number };
+export type JudgeStats = { confidence: Record<string, number>; runs: JudgeRun[] };
+
+/** Which page a label sends a posting to. */
+export function labelSide(label: string) {
+  if (label === "Manual & Field Operations") return "neither";
+  return (nonTechnicalFamilyOptions as string[]).includes(label) ? "non-tech" : "tech";
+}
+
+/** Where the owner overruled the judge; a correction on a posting it never scored says nothing about it. */
+export function summarizeCorrections(judged: Labels, corrections: Corrections) {
+  const overruled = Object.entries(corrections)
+    .filter(([key, { label }]) => judged[key] && judged[key] !== label)
+    .map(([key, { title, company, label }]) => ({ key, title, company, judge: judged[key], owner: label }));
+  return {
+    overruled,
+    wrongPage: overruled.filter(({ judge, owner }) => labelSide(judge) !== labelSide(owner)).length,
+  };
+}
 
 /** The judge's prompt: the rules, then the owner's latest corrections as examples. */
 export function judgeInstructions(corrections: Corrections) {
@@ -67,9 +86,12 @@ async function decide(posting: RecentPosting, prompt: string) {
     }),
   });
   if (!response.ok) throw new Error(`OpenAI returned ${response.status}`);
-  const { answers } = await response.json() as { answers: Array<{ type: string; choice?: string }> };
+  const { answers, usage } = await response.json() as {
+    answers: Array<{ choice?: string; confidence?: number }>;
+    usage?: { input_tokens?: number };
+  };
   // A refusal is stored as "" so the posting keeps its title rule and is not asked again.
-  return answers[0]?.choice ?? "";
+  return { label: answers[0]?.choice ?? "", confidence: answers[0]?.confidence ?? 0, tokens: usage?.input_tokens ?? 0 };
 }
 
 /** The labels so far, and how many postings still wait. Without a key nothing waits. */
@@ -87,13 +109,42 @@ export async function judgeNext() {
   const { stored, merged, corrections } = await readAll();
   const waiting = await unjudged(merged);
   const prompt = judgeInstructions(corrections);
+  const startedAt = Date.now();
+  const batch = waiting.slice(0, 300);
   const judged: Labels = {};
-  await mapWithinDeadline(waiting.slice(0, 300), 30, Date.now(), 45_000, async (posting) => {
-    const label = await decide(posting, prompt).catch(() => null);
-    if (label !== null) judged[posting.key] = label;
+  const confidence: Record<string, number> = {};
+  let tokens = 0;
+  await mapWithinDeadline(batch, 30, startedAt, 45_000, async (posting) => {
+    const answer = await decide(posting, prompt).catch(() => null);
+    if (!answer) return;
+    judged[posting.key] = answer.label;
+    confidence[posting.key] = answer.confidence;
+    tokens += answer.tokens;
   });
-  await writeStored(labelsPath, { ...stored, ...judged });
-  return { labels: judged, remaining: waiting.length - Object.keys(judged).length };
+  const count = Object.keys(judged).length;
+  const stats = await readStored<JudgeStats>(judgeStatsPath) ?? { confidence: {}, runs: [] };
+  const run = {
+    at: new Date(startedAt).toISOString(),
+    judged: count,
+    failed: batch.length - count,
+    tokens,
+    seconds: Math.round((Date.now() - startedAt) / 1000),
+  };
+  await Promise.all([
+    writeStored(labelsPath, { ...stored, ...judged }),
+    writeStored(judgeStatsPath, { confidence: { ...stats.confidence, ...confidence }, runs: [...stats.runs, run].slice(-200) }),
+  ]);
+  return { labels: judged, remaining: waiting.length - count };
+}
+
+/** Everything the report page reads. */
+export async function judgeData() {
+  const [{ stored, corrections }, stats, { remaining }] = await Promise.all([
+    readAll(),
+    readStored<JudgeStats>(judgeStatsPath),
+    judgeStatus(),
+  ]);
+  return { judged: stored, corrections, stats: stats ?? { confidence: {}, runs: [] }, remaining };
 }
 
 /** Saves the owner's label for one posting; it also teaches the judge from then on. */
