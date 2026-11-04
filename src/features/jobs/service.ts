@@ -301,8 +301,7 @@ export async function buildBoard(previous: Board | null): Promise<{ board: Board
   const previousPresets = previous && Object.fromEntries(
     Object.entries(previous.presets).map(([id, rows]) => [id, rows.map((row) => fromIndexRow(row))]),
   );
-  const presets = await withTimeout(resolvePresets(entries, previousPresets ?? undefined), 25_000)
-    .catch(() => previousPresets ?? {});
+  const presets = await resolvePresets(entries, previousPresets ?? undefined);
 
   const fetchedAt = new Date().toISOString();
   const oldest = Date.parse(fetchedAt) - recentWindowMs;
