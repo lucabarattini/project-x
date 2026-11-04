@@ -219,6 +219,19 @@ test("data analysts are technical and stay off the non-tech portal", () => {
   assert.equal(nonTech.total, 0, "data analyst stays off the non-tech portal");
 });
 
+test("the target filter keeps only Shopify, Starbucks and Nordstrom, and survives the address", () => {
+  const data = entries([
+    job({ id: "1", title: "Data Scientist", company: "Shopify" }),
+    job({ id: "2", title: "Data Scientist", company: "Starbucks" }),
+    job({ id: "3", title: "Data Scientist", company: "Nordstrom" }),
+    job({ id: "4", title: "Data Scientist", company: "Stripe" }),
+  ]);
+  const params = { ...defaultSearchParams, date: "all" as const, targetsOnly: true };
+  assert.equal(searchJobs(data, params).total, 3);
+  assert.equal(serializeSearchParams({ ...defaultSearchParams, targetsOnly: true }), "?targets=1");
+  assert.equal(parseSearchParams({ targets: "1" }).targetsOnly, true);
+});
+
 test("a posting never appears on both portals", () => {
   const data = entries([
     job({ id: "1", title: "Finance Lead" }),

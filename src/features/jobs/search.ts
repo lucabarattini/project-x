@@ -54,6 +54,9 @@ const hedgeFundCompanies = new Set([
   "Marshall Wace", "Qube RT", "Viking Global", "Walleye Capital", "Winton",
 ]);
 
+/** The companies the search is focused on right now. */
+const targetCompanies = new Set(["Shopify", "Starbucks", "Nordstrom"]);
+
 const nonTechnicalFamilyIds: Record<NonTechnicalFamily, string> = {
   "Sales & Partnerships": "sales",
   "Marketing & Communications": "marketing",
@@ -82,6 +85,7 @@ export type JobSearchParams = {
   /** Role-family filter used by the non-technical portal. */
   families: NonTechnicalFamily[];
   fundsOnly: boolean;
+  targetsOnly: boolean;
   /** A saved careers-site search (see presets.ts); its own site picks the postings. */
   preset: string | null;
   sort: JobSortKey;
@@ -100,6 +104,7 @@ export const defaultSearchParams: JobSearchParams = {
   roleTypes: [...defaultRoleTracks],
   families: [...nonTechnicalFamilies],
   fundsOnly: false,
+  targetsOnly: false,
   preset: null,
   sort: "postedAt",
   dir: "desc",
@@ -182,6 +187,7 @@ export function parseSearchParams(
   if (portal === "nontech") params.portal = "non-tech";
   if (portal === "internships") params.portal = "internships";
   if (firstString(searchParams.funds) === "1") params.fundsOnly = true;
+  if (firstString(searchParams.targets) === "1") params.targetsOnly = true;
   const preset = firstString(searchParams.preset);
   if (preset) params.preset = preset.slice(0, 60);
 
@@ -241,6 +247,7 @@ export function serializeSearchParams(params: JobSearchParams): string {
     url.set("portal", params.portal === "non-tech" ? "nontech" : params.portal);
   }
   if (params.fundsOnly) url.set("funds", "1");
+  if (params.targetsOnly) url.set("targets", "1");
   if (params.preset) url.set("preset", params.preset);
 
   const defaultFamilies = new Set(defaultSearchParams.families);
@@ -403,6 +410,7 @@ export function searchJobs(
     return (
       matchesCompany(job.company, params.company) &&
       (!params.fundsOnly || hedgeFundCompanies.has(job.company)) &&
+      (!params.targetsOnly || targetCompanies.has(job.company)) &&
       matchesCountry(job.location, effectiveCountry) &&
       matchesLocation(job.location, params.locations) &&
       matchesDate(job.postedAt, params.date, now) &&

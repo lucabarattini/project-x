@@ -389,6 +389,7 @@ export function JobDashboard({ boards }: Props) {
     })),
     ...(params.company ? [{ label: params.company, onClear: () => updateParams({ company: null }) }] : []),
     ...(params.fundsOnly ? [{ label: "Hedge funds & trading", onClear: () => updateParams({ fundsOnly: false }) }] : []),
+    ...(params.targetsOnly ? [{ label: "Shopify, Starbucks & Nordstrom", onClear: () => updateParams({ targetsOnly: false }) }] : []),
     ...searchPresets
       .filter((preset) => preset.id === params.preset)
       .map((preset) => ({ label: preset.label, onClear: () => updateParams({ preset: null }) })),
@@ -424,6 +425,15 @@ export function JobDashboard({ boards }: Props) {
         >
           <span>📈 Hedge funds &amp; trading only</span>
           {params.fundsOnly ? <Icon name="check" className="h-4 w-4 shrink-0" /> : null}
+        </button>
+        <button
+          aria-pressed={params.targetsOnly}
+          className="filter-btn mt-2 w-full justify-between"
+          onClick={() => updateParams({ targetsOnly: !params.targetsOnly })}
+          type="button"
+        >
+          <span>🎯 Shopify, Starbucks &amp; Nordstrom</span>
+          {params.targetsOnly ? <Icon name="check" className="h-4 w-4 shrink-0" /> : null}
         </button>
         {searchPresets.map((preset) => (
           <button
