@@ -106,8 +106,8 @@ const nonTechnicalFamilyIcons: Record<NonTechnicalFamily, IconName> = {
 
 function FilterHeading({ icon, children }: { icon: IconName; children: ReactNode }) {
   return (
-    <div className="mb-2.5 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-      <Icon name={icon} className="h-4 w-4 text-sky-700 dark:text-sky-400" />
+    <div className="mb-2.5 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
+      <Icon name={icon} className="h-4 w-4 text-sky-700" />
       <span>{children}</span>
     </div>
   );
@@ -129,15 +129,15 @@ function StatItem({
   detail: string;
 }) {
   return (
-    <div className="flex items-center gap-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400">
+    <div className="flex items-center gap-3.5 rounded-2xl border border-slate-200 bg-white px-5 py-4">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700">
         <Icon name={icon} className="h-5 w-5" />
       </span>
       <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-slate-500 dark:text-slate-400">{label}</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-slate-500">{label}</p>
         <div className="mt-0.5 flex items-baseline gap-2">
-          <p className="text-xl font-bold tracking-[-0.03em] text-slate-950 dark:text-slate-50">{value}</p>
-          <p className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">{detail}</p>
+          <p className="text-xl font-bold tracking-[-0.03em] text-slate-950">{value}</p>
+          <p className="truncate text-[11px] font-medium text-slate-500">{detail}</p>
         </div>
       </div>
     </div>
@@ -149,14 +149,14 @@ function BoardSkeleton() {
     <section className="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-6 lg:px-10">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[0, 1, 2, 3].map((item) => (
-          <div className="h-[76px] animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" key={item} />
+          <div className="h-[76px] animate-pulse rounded-2xl bg-slate-100" key={item} />
         ))}
       </div>
       <div className="mt-6 grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <div className="hidden h-[560px] animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800 lg:block" />
+        <div className="hidden h-[560px] animate-pulse rounded-2xl bg-slate-100 lg:block" />
         <div className="space-y-3">
           {[0, 1, 2, 3, 4, 5].map((item) => (
-            <div className="h-24 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" key={item} />
+            <div className="h-24 animate-pulse rounded-2xl bg-slate-100" key={item} />
           ))}
         </div>
       </div>
@@ -321,7 +321,7 @@ export function JobDashboard({ boards }: Props) {
 
   if (boardMissing) {
     return (
-      <p className="mx-auto w-full max-w-[1400px] px-4 py-16 text-center text-sm font-semibold text-slate-600 dark:text-slate-400 sm:px-6 lg:px-10">
+      <p className="mx-auto w-full max-w-[1400px] px-4 py-16 text-center text-sm font-semibold text-slate-600 sm:px-6 lg:px-10">
         The job board could not be loaded. Try again in a minute.
       </p>
     );
@@ -428,7 +428,7 @@ export function JobDashboard({ boards }: Props) {
       <div>
         <div className="mb-2.5 flex items-end justify-between gap-3">
           <FilterHeading icon="map-pin">Popular cities</FilterHeading>
-          <span className="mb-2.5 text-[11px] font-bold text-sky-700 dark:text-sky-400">
+          <span className="mb-2.5 text-[11px] font-bold text-sky-700">
             {params.locations.length === 0 ? "Any U.S. city" : `${params.locations.length} selected`}
           </span>
         </div>
@@ -454,7 +454,7 @@ export function JobDashboard({ boards }: Props) {
       <div>
         <div className="mb-2.5 flex items-end justify-between gap-3">
           <FilterHeading icon="building">Company</FilterHeading>
-          <span className="mb-2.5 text-[11px] font-bold text-sky-700 dark:text-sky-400">
+          <span className="mb-2.5 text-[11px] font-bold text-sky-700">
             {companyCounts.length} tracked
           </span>
         </div>
@@ -473,7 +473,7 @@ export function JobDashboard({ boards }: Props) {
               </option>
             ))}
           </select>
-          <Icon name="chevron-down" className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+          <Icon name="chevron-down" className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         </div>
       </div>
 
@@ -489,14 +489,14 @@ export function JobDashboard({ boards }: Props) {
               return (
                 <button
                   aria-pressed={active}
-                  className={`filter-btn w-full justify-start py-2.5 text-left ${active ? "!border-sky-700 !bg-sky-50 dark:bg-sky-500/15 !text-sky-900" : ""}`}
+                  className={`filter-btn w-full justify-start py-2.5 text-left ${active ? "!border-sky-700 !bg-sky-50 !text-sky-900" : ""}`}
                   key={family}
                   onClick={() => toggleFamily(family)}
                   type="button"
                 >
-                  <Icon name={nonTechnicalFamilyIcons[family]} className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+                  <Icon name={nonTechnicalFamilyIcons[family]} className="h-4 w-4 shrink-0 text-slate-400" />
                   <span className="min-w-0 flex-1">{family}</span>
-                  {active ? <Icon name="check" className="h-4 w-4 shrink-0 text-sky-700 dark:text-sky-400" /> : null}
+                  {active ? <Icon name="check" className="h-4 w-4 shrink-0 text-sky-700" /> : null}
                 </button>
               );
             })}
@@ -508,20 +508,20 @@ export function JobDashboard({ boards }: Props) {
               return (
                 <button
                   aria-pressed={active}
-                  className={`filter-btn w-full justify-start py-2.5 text-left ${active ? "!border-sky-700 !bg-sky-50 dark:bg-sky-500/15 !text-sky-900" : ""}`}
+                  className={`filter-btn w-full justify-start py-2.5 text-left ${active ? "!border-sky-700 !bg-sky-50 !text-sky-900" : ""}`}
                   key={track}
                   onClick={() => toggleTrack(track)}
                   type="button"
                 >
-                  <Icon name={roleTrackIcons[track] ?? "briefcase"} className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+                  <Icon name={roleTrackIcons[track] ?? "briefcase"} className="h-4 w-4 shrink-0 text-slate-400" />
                   <span className="min-w-0 flex-1">{track}</span>
-                  {active ? <Icon name="check" className="h-4 w-4 shrink-0 text-sky-700 dark:text-sky-400" /> : null}
+                  {active ? <Icon name="check" className="h-4 w-4 shrink-0 text-sky-700" /> : null}
                 </button>
               );
             })}
           </div>
         )}
-        <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+        <p className="mt-2 text-xs leading-5 text-slate-500">
           {params.portal === "non-tech"
             ? "Families are off by default; nothing is ever deleted, just hidden."
             : "Needs review is selected by default and never silently removes a role."}
@@ -588,13 +588,13 @@ export function JobDashboard({ boards }: Props) {
       {/* Toolbar */}
       <div className="mb-4 flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div aria-label="Portal" className="inline-flex rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1" role="group">
+          <div aria-label="Portal" className="inline-flex rounded-xl border border-slate-200 bg-white p-1" role="group">
             <button
               aria-pressed={params.portal === "tech"}
               className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg px-4 text-sm font-bold transition-colors ${
                 params.portal === "tech"
-                  ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
+                  ? "bg-slate-950 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
               onClick={() => switchPortal("tech")}
               type="button"
@@ -605,8 +605,8 @@ export function JobDashboard({ boards }: Props) {
               aria-pressed={params.portal === "non-tech"}
               className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg px-4 text-sm font-bold transition-colors ${
                 params.portal === "non-tech"
-                  ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
+                  ? "bg-slate-950 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
               onClick={() => switchPortal("non-tech")}
               type="button"
@@ -617,8 +617,8 @@ export function JobDashboard({ boards }: Props) {
               aria-pressed={params.portal === "internships"}
               className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg px-4 text-sm font-bold transition-colors ${
                 params.portal === "internships"
-                  ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
+                  ? "bg-slate-950 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
               onClick={() => switchPortal("internships")}
               type="button"
@@ -626,7 +626,7 @@ export function JobDashboard({ boards }: Props) {
               <Icon name="sparkle" className="h-4 w-4" /> Internships
             </button>
           </div>
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          <p className="text-xs font-medium text-slate-500">
             {params.portal === "internships"
               ? "Internships, co-ops & summer analyst programs"
               : params.portal === "non-tech"
@@ -637,7 +637,7 @@ export function JobDashboard({ boards }: Props) {
 
         <div className="card flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1">
-            <Icon name="search" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            <Icon name="search" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <label className="sr-only" htmlFor="job-search">Search jobs</label>
             <input
               autoComplete="off"
@@ -651,13 +651,13 @@ export function JobDashboard({ boards }: Props) {
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {/* One-click Newest/Oldest ordering */}
-            <div aria-label="Order by date" className="inline-flex rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1" role="group">
+            <div aria-label="Order by date" className="inline-flex rounded-xl border border-slate-200 bg-white p-1" role="group">
               <button
                 aria-pressed={params.sort === "postedAt" && params.dir === "desc"}
                 className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-bold transition-colors ${
                   params.sort === "postedAt" && params.dir === "desc"
-                    ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
-                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
+                    ? "bg-slate-950 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
                 onClick={() => updateParams({ sort: "postedAt", dir: "desc" })}
                 type="button"
@@ -668,8 +668,8 @@ export function JobDashboard({ boards }: Props) {
                 aria-pressed={params.sort === "postedAt" && params.dir === "asc"}
                 className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-bold transition-colors ${
                   params.sort === "postedAt" && params.dir === "asc"
-                    ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
-                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
+                    ? "bg-slate-950 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
                 onClick={() => updateParams({ sort: "postedAt", dir: "asc" })}
                 type="button"
@@ -715,9 +715,9 @@ export function JobDashboard({ boards }: Props) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <p className="mr-1 text-sm font-bold text-slate-900 dark:text-slate-100">
+          <p className="mr-1 text-sm font-bold text-slate-900">
             {total.toLocaleString("en-US")} roles
-            <span className="font-medium text-slate-500 dark:text-slate-400"> · {companiesInResults} companies</span>
+            <span className="font-medium text-slate-500"> · {companiesInResults} companies</span>
           </p>
           <span aria-hidden="true" className="hidden text-slate-300 sm:inline">|</span>
           <div className="flex flex-wrap gap-1.5">
@@ -737,7 +737,7 @@ export function JobDashboard({ boards }: Props) {
               </span>
             ))}
             {activeChips.length > 4 ? (
-              <button className="chip border-transparent text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-500/15" onClick={resetFilters} type="button">
+              <button className="chip border-transparent text-sky-700 hover:bg-sky-50" onClick={resetFilters} type="button">
                 Clear all
               </button>
             ) : null}
@@ -752,13 +752,13 @@ export function JobDashboard({ boards }: Props) {
         <aside className="hidden min-w-0 lg:block lg:self-stretch">
           <div className="space-y-4 pb-4">
             <SectionCard>
-              <div className="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+              <div className="border-b border-slate-200 px-5 py-4">
                 <div className="flex items-center gap-3">
                   <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-700 text-white">
                     <Icon name="sliders" className="h-4 w-4" />
                   </span>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-400">Filters</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-sky-700">Filters</p>
                     <h2 className="text-base font-bold tracking-[-0.02em]">Tune the feed</h2>
                   </div>
                 </div>
@@ -767,19 +767,19 @@ export function JobDashboard({ boards }: Props) {
             </SectionCard>
 
             <SectionCard>
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Sources</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Sources</p>
                   <h2 className="mt-0.5 text-base font-bold tracking-[-0.02em]">Career pages</h2>
                 </div>
-                <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-400">{boards.length}</span>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{boards.length}</span>
               </div>
               <div className="max-h-[520px] overflow-y-auto">
                 {boards.map((board) => {
                   const active = params.company === board.company;
                   const count = companyCounts.find((item) => item.company === board.company)?.count ?? 0;
                   return (
-                    <div className={`flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 p-3 last:border-0 ${active ? "bg-sky-50 dark:bg-sky-500/15" : "hover:bg-slate-50 dark:hover:bg-slate-800/60"}`} key={`${board.source}-${board.token}`}>
+                    <div className={`flex items-center gap-3 border-b border-slate-100 p-3 last:border-0 ${active ? "bg-sky-50" : "hover:bg-slate-50"}`} key={`${board.source}-${board.token}`}>
                       <button
                         aria-label={`Filter by ${board.company}`}
                         aria-pressed={active}
@@ -791,19 +791,19 @@ export function JobDashboard({ boards }: Props) {
                       </button>
                       <div className="min-w-0 flex-1">
                         <button
-                          className="block max-w-full truncate text-left text-sm font-bold text-slate-950 dark:text-slate-50 hover:text-sky-800 dark:hover:text-sky-300"
+                          className="block max-w-full truncate text-left text-sm font-bold text-slate-950 hover:text-sky-800"
                           onClick={() => updateParams({ company: active ? null : board.company })}
                           type="button"
                         >
                           {board.company}
                         </button>
-                        <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                        <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">
                           {board.source} · {count.toLocaleString("en-US")} jobs
                         </p>
                       </div>
                       <a
                         aria-label={`Open ${board.company} careers page`}
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors hover:border-sky-300 hover:text-sky-800 dark:hover:text-sky-300"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:border-sky-300 hover:text-sky-800"
                         href={board.boardUrl}
                         rel="noreferrer"
                         target="_blank"
@@ -822,7 +822,7 @@ export function JobDashboard({ boards }: Props) {
         {filtersOpen ? (
           <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-label="Filters" aria-modal="true">
             <div className="absolute inset-0 bg-slate-950/40" onClick={() => setFiltersOpen(false)} />
-            <div className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-2xl bg-white dark:bg-slate-800 p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+            <div className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-2xl bg-white p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-base font-bold tracking-[-0.02em]">Filters</h2>
                 <button
@@ -845,20 +845,20 @@ export function JobDashboard({ boards }: Props) {
         {/* Results */}
         <div id="latest-jobs" className="min-w-0 scroll-mt-24">
           <div className="card overflow-hidden">
-            <div className="hidden grid-cols-[minmax(0,1.6fr)_minmax(120px,0.7fr)_minmax(150px,0.8fr)_minmax(120px,0.7fr)_minmax(110px,0.55fr)_110px] items-center gap-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 xl:grid">
+            <div className="hidden grid-cols-[minmax(0,1.6fr)_minmax(120px,0.7fr)_minmax(150px,0.8fr)_minmax(120px,0.7fr)_minmax(110px,0.55fr)_110px] items-center gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 xl:grid">
               {([
                 ["title", "Role"], ["company", "Company"], ["experience", "Experience"],
                 ["location", "Location"], ["postedAt", "Published"], ["updatedAt", "Modified"],
               ] as const).map(([key, label]) => (
                 <button
                   aria-label={`Sort by ${label}`}
-                  className={`flex items-center gap-1.5 rounded-md py-1 transition-colors hover:text-sky-800 dark:hover:text-sky-300 ${key === "postedAt" || key === "updatedAt" ? "justify-self-end text-right" : "justify-self-start text-left"}`}
+                  className={`flex items-center gap-1.5 rounded-md py-1 transition-colors hover:text-sky-800 ${key === "postedAt" || key === "updatedAt" ? "justify-self-end text-right" : "justify-self-start text-left"}`}
                   key={key}
                   onClick={() => toggleSort(key)}
                   type="button"
                 >
                   {label}
-                  <span aria-hidden="true" className={params.sort === key ? "text-sky-700 dark:text-sky-400" : "text-slate-300"}>
+                  <span aria-hidden="true" className={params.sort === key ? "text-sky-700" : "text-slate-300"}>
                     {params.sort === key ? (params.dir === "asc" ? "↑" : "↓") : "↕"}
                   </span>
                 </button>
@@ -866,43 +866,43 @@ export function JobDashboard({ boards }: Props) {
             </div>
 
             {judging ? (
-              <div className="border-b border-slate-200 dark:border-slate-700 bg-sky-50 dark:bg-sky-500/15 px-5 py-3" role="status">
-                <p className="flex items-center gap-2 text-xs font-bold text-sky-900 dark:text-sky-300">
+              <div className="border-b border-slate-200 bg-sky-50 px-5 py-3" role="status">
+                <p className="flex items-center gap-2 text-xs font-bold text-sky-900">
                   <Icon name="sparkle" className="h-4 w-4 animate-pulse" />
                   The judge is scoring new roles…
                   <span className="font-semibold">{judging.done.toLocaleString("en-US")} of {judging.total.toLocaleString("en-US")}</span>
                 </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sky-100 dark:bg-sky-500/20">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sky-100">
                   <div
-                    className="h-full animate-pulse rounded-full bg-sky-700 transition-[width] duration-700 dark:bg-sky-400"
+                    className="h-full animate-pulse rounded-full bg-sky-700 transition-[width] duration-700"
                     style={{ width: `${Math.max(3, (judging.done / judging.total) * 100)}%` }}
                   />
                 </div>
               </div>
             ) : null}
             {judgeFailed ? (
-              <p className="flex items-center gap-2 border-b border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/15 px-5 py-3 text-xs font-semibold text-amber-900 dark:text-amber-300">
+              <p className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-5 py-3 text-xs font-semibold text-amber-900">
                 <Icon name="alert-triangle" className="h-4 w-4 shrink-0" />
                 The judge stopped early. Unscored roles use the title rules until your next visit.
               </p>
             ) : null}
             {isOverADayOld(board.fetchedAt) ? (
-              <p className="flex items-center gap-2 border-b border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/15 px-5 py-3 text-xs font-semibold text-amber-900 dark:text-amber-300">
+              <p className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-5 py-3 text-xs font-semibold text-amber-900">
                 <Icon name="alert-triangle" className="h-4 w-4 shrink-0" />
                 This board was built {formatRelativeDate(board.fetchedAt)}. The scheduled build may be failing.
               </p>
             ) : null}
 
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="divide-y divide-slate-100">
               {results.map((job) => (
-                <article className="group px-4 py-4 transition-colors duration-150 hover:bg-slate-50 dark:hover:bg-slate-800/60 sm:px-5" key={job.id}>
+                <article className="group px-4 py-4 transition-colors duration-150 hover:bg-slate-50 sm:px-5" key={job.id}>
                   <div className="flex items-start gap-3.5">
                     <span className="mt-0.5 hidden sm:inline-flex">
                       <CompanyLogo company={job.company} size="sm" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="badge border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400">{job.category}</span>
+                        <span className="badge border-slate-200 bg-slate-50 text-slate-600">{job.category}</span>
                         <span className={`badge ${job.badgeClass}`}>
                           <span aria-hidden="true" className="badge-dot bg-current opacity-60" />
                           {job.badgeLabel}
@@ -910,45 +910,45 @@ export function JobDashboard({ boards }: Props) {
                       </div>
                       <h3 className="mt-2">
                         <a
-                          className="inline-flex max-w-full items-start gap-1.5 text-[15px] font-bold leading-6 text-slate-950 dark:text-slate-50 transition-colors hover:text-sky-800 dark:hover:text-sky-300"
+                          className="inline-flex max-w-full items-start gap-1.5 text-[15px] font-bold leading-6 text-slate-950 transition-colors hover:text-sky-800"
                           href={job.absoluteUrl}
                           rel="noreferrer"
                           target="_blank"
                         >
                           <span>{job.title}</span>
-                          <Icon name="arrow-up-right" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500" />
+                          <Icon name="arrow-up-right" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
                         </a>
                       </h3>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] font-medium text-slate-600 dark:text-slate-400">
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] font-medium text-slate-600">
                         <span className="inline-flex items-center gap-1.5">
                           <CompanyLogo company={job.company} size="sm" className="!h-4 !w-4 !rounded !text-[8px] sm:hidden" />
                           <span className="sm:hidden">{job.company}</span>
                           <span className="hidden sm:inline">{job.company}</span>
                         </span>
-                        <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                        <span className="inline-flex items-center gap-1 text-slate-500">
                           <Icon name="map-pin" className="h-3.5 w-3.5" /> {job.location}
                         </span>
                       </div>
 
-                      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2.5 border-t border-slate-100 dark:border-slate-800 pt-3">
+                      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2.5 border-t border-slate-100 pt-3">
                         <div className="flex items-center gap-2.5">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
                             <Icon name="calendar" className="h-4 w-4" />
                           </span>
                           <div>
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Published</p>
+                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Published</p>
                             <p className="text-[13px] font-bold leading-4 text-sky-900">{formatRelativeDate(job.postedAt)}</p>
-                            <p className="mt-0.5 text-[11px] font-medium leading-4 text-slate-400 dark:text-slate-500">{formatExactDate(job.postedAt) ?? "—"}</p>
+                            <p className="mt-0.5 text-[11px] font-medium leading-4 text-slate-400">{formatExactDate(job.postedAt) ?? "—"}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2.5">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                             <Icon name="clock" className="h-4 w-4" />
                           </span>
                           <div>
-                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Modified</p>
-                            <p className="text-[13px] font-bold leading-4 text-slate-600 dark:text-slate-400">{formatRelativeDate(job.updatedAt)}</p>
-                            <p className="mt-0.5 text-[11px] font-medium leading-4 text-slate-400 dark:text-slate-500">{job.updatedAt ? (formatExactDate(job.updatedAt) ?? "—") : "—"}</p>
+                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Modified</p>
+                            <p className="text-[13px] font-bold leading-4 text-slate-600">{formatRelativeDate(job.updatedAt)}</p>
+                            <p className="mt-0.5 text-[11px] font-medium leading-4 text-slate-400">{job.updatedAt ? (formatExactDate(job.updatedAt) ?? "—") : "—"}</p>
                           </div>
                         </div>
                       </div>
@@ -967,10 +967,10 @@ export function JobDashboard({ boards }: Props) {
 
               {results.length === 0 ? (
                 <div className="px-5 py-16 text-center">
-                  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500">
+                  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
                     <Icon name="search" className="h-6 w-6" />
                   </span>
-                  <h3 className="mt-5 text-lg font-bold tracking-[-0.03em] text-slate-950 dark:text-slate-50">No roles match these filters</h3>
+                  <h3 className="mt-5 text-lg font-bold tracking-[-0.03em] text-slate-950">No roles match these filters</h3>
                   <button className="btn btn-primary mt-5" onClick={resetFilters} type="button">
                     <Icon name="refresh" className="h-4 w-4" /> Reset to defaults
                   </button>
@@ -978,7 +978,7 @@ export function JobDashboard({ boards }: Props) {
               ) : null}
             </div>
 
-            <div className="flex flex-col items-center gap-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-5 py-4">
+            <div className="flex flex-col items-center gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
               {results.length < total ? (
                 <button
                   className="btn btn-secondary w-full sm:w-auto"
@@ -988,15 +988,15 @@ export function JobDashboard({ boards }: Props) {
                   Load more roles
                 </button>
               ) : total > 0 ? (
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">All {total.toLocaleString("en-US")} matching roles shown.</p>
+                <p className="text-xs font-medium text-slate-500">All {total.toLocaleString("en-US")} matching roles shown.</p>
               ) : null}
 
-              <div className="flex flex-col items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:flex-row sm:gap-4">
+              <div className="flex flex-col items-center gap-1 text-[11px] font-medium text-slate-500 sm:flex-row sm:gap-4">
                 <p>Data fetched at {formatJobDate(board.fetchedAt)}</p>
                 {providerWarnings.length > 0 ? (
                   <>
                     <p className="hidden text-slate-300 sm:inline">·</p>
-                    <p className="inline-flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400">
+                    <p className="inline-flex items-center gap-1 font-semibold text-amber-700">
                       <Icon name="alert-triangle" className="h-3.5 w-3.5" />
                       {providerWarnings.length} source{providerWarnings.length === 1 ? "" : "s"} unavailable
                     </p>
@@ -1005,7 +1005,7 @@ export function JobDashboard({ boards }: Props) {
                 {emptyProviders.length > 0 ? (
                   <>
                     <p className="hidden text-slate-300 sm:inline">·</p>
-                    <p className="text-slate-500 dark:text-slate-400">
+                    <p className="text-slate-500">
                       {emptyProviders.length} source{emptyProviders.length === 1 ? "" : "s"} with no openings
                     </p>
                   </>
@@ -1017,12 +1017,12 @@ export function JobDashboard({ boards }: Props) {
           {/* Mobile: sources list */}
           <div className="mt-4 lg:hidden">
             <SectionCard>
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Sources</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Sources</p>
                   <h2 className="mt-0.5 text-base font-bold tracking-[-0.02em]">Career pages</h2>
                 </div>
-                <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-400">{boards.length}</span>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{boards.length}</span>
               </div>
               <div className="grid grid-cols-1 gap-px sm:grid-cols-2">
                 {boards.map((board) => {
@@ -1030,15 +1030,15 @@ export function JobDashboard({ boards }: Props) {
                   const count = companyCounts.find((item) => item.company === board.company)?.count ?? 0;
                   return (
                     <button
-                      className={`flex items-center gap-3 p-3 text-left transition-colors ${active ? "bg-sky-50 dark:bg-sky-500/15" : "hover:bg-slate-50 dark:hover:bg-slate-800/60"}`}
+                      className={`flex items-center gap-3 p-3 text-left transition-colors ${active ? "bg-sky-50" : "hover:bg-slate-50"}`}
                       key={`${board.source}-${board.token}`}
                       onClick={() => updateParams({ company: active ? null : board.company })}
                       type="button"
                     >
                       <CompanyLogo company={board.company} size="sm" />
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-bold text-slate-950 dark:text-slate-50">{board.company}</span>
-                        <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                        <span className="block truncate text-sm font-bold text-slate-950">{board.company}</span>
+                        <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-400">
                           {board.source} · {count.toLocaleString("en-US")} jobs
                         </span>
                       </span>

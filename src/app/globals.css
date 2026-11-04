@@ -1,8 +1,5 @@
 @import "tailwindcss";
 
-/* Class-based dark mode: toggled by adding `.dark` to <html>. */
-@custom-variant dark (&:where(.dark, .dark *));
-
 :root {
   --background: #f8fafc;
   --foreground: #020617;
@@ -18,23 +15,6 @@
   --success: #047857;
   --warning: #b45309;
   --danger: #be123c;
-}
-
-.dark {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
-  --surface: #1e293b;
-  --line: #334155;
-  --line-strong: #475569;
-  --accent: #38bdf8;
-  --accent-hover: #0ea5e9;
-  --accent-ink: #bae6fd;
-  --accent-soft: rgba(56, 189, 248, 0.12);
-  --muted: #94a3b8;
-  --faint: #64748b;
-  --success: #34d399;
-  --warning: #fbbf24;
-  --danger: #fb7185;
 }
 
 @theme inline {
