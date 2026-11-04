@@ -1,5 +1,6 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { get } from "@vercel/blob";
+import { isSignedIn, sessionToken } from "@/features/outreach/session";
 
 /**
  * Private outreach list: the people Gemma is writing to, with their LinkedIn
@@ -42,17 +43,6 @@ type Contact = {
   // Decision makers for the Shopify FP&A push, listed in their own section instead of under Shopify.
   track?: "director" | "recruiter";
 };
-
-function sessionToken() {
-  const password = process.env.OUTREACH_PASSWORD;
-  return password ? createHmac("sha256", password).update("outreach-session").digest("hex") : null;
-}
-
-function isSignedIn(request: Request) {
-  const expected = sessionToken();
-  const cookie = request.headers.get("cookie")?.match(/(?:^|;\s*)outreach=([a-f0-9]{64})/u)?.[1];
-  return Boolean(expected && cookie && timingSafeEqual(Buffer.from(cookie), Buffer.from(expected)));
-}
 
 function escape(value: string) {
   return value.replace(/[&<>"']/gu, (char) => `&#${char.charCodeAt(0)};`);
@@ -186,7 +176,8 @@ export async function POST(request: Request) {
     status: 303,
     headers: {
       location: "/outreach",
-      "set-cookie": `${cookieName}=${sessionToken()}; Path=/outreach; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000`,
+      // Site-wide: the same sign-in unlocks label corrections on the board.
+      "set-cookie": `${cookieName}=${sessionToken()}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000`,
     },
   });
 }

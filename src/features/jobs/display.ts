@@ -643,6 +643,12 @@ export function technicalTrackOptions() {
   return technicalFamilies.map((family) => family.category);
 }
 
+/** What a posting can be labelled, by the judge or by a correction. */
+export const judgeLabels: string[] = [
+  ...technicalTrackOptions().filter((track) => track !== "Operations & Support" && track !== "Non-Technical"),
+  ...nonTechnicalFamilyOptions,
+];
+
 export function hasSeniorOrManagerSignal(title: string) {
   return excludedDefaultTitlePatterns.slice(9).some((pattern) => pattern.test(title)) ||
     excludedDefaultTitlePatterns.slice(0, 6).some((pattern) => pattern.test(title));

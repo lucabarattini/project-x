@@ -28,13 +28,14 @@ import {
 import { locationFilters, type JobSortKey } from "../filters";
 import { searchPresets } from "../presets";
 import {
+  judgeLabels,
   nonTechnicalFamilies,
   nonTechnicalFamilyOptions,
   type ExperienceFilter,
   type NonTechnicalFamily,
   type RoleTypeFilter,
 } from "../display";
-import { fromIndexRow, rowKey } from "../search-model";
+import { fromIndexRow, rowKey, type IndexRow, type JobListItem } from "../search-model";
 import type { GreenhouseBoard } from "../providers/greenhouse";
 import type { Board } from "../service";
 
@@ -42,7 +43,7 @@ type Props = {
   boards: Array<Pick<GreenhouseBoard, "company" | "token" | "source" | "boardUrl">>;
 };
 
-type JudgeUpdate = { labels: Record<string, string>; remaining: number };
+type JudgeUpdate = { labels: Record<string, string>; remaining: number; signedIn?: boolean };
 
 const experienceLabels: Record<string, string> = {
   early: "1–3 Years",
@@ -189,6 +190,9 @@ export function JobDashboard({ boards }: Props) {
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [judging, setJudging] = useState<{ done: number; total: number } | null>(null);
   const [judgeFailed, setJudgeFailed] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  const [correcting, setCorrecting] = useState<string | null>(null);
+  const [correctionFailed, setCorrectionFailed] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   // One load per visit. The judge only runs here, when the site is opened, and
@@ -212,6 +216,7 @@ export function JobDashboard({ boards }: Props) {
         const status = await readJudge();
         if (cancelled) return;
         setLabels(status.labels);
+        setSignedIn(Boolean(status.signedIn));
         let remaining = status.remaining;
         while (remaining > 0 && !cancelled) {
           setJudging({ done: status.remaining - remaining, total: status.remaining });
@@ -235,15 +240,16 @@ export function JobDashboard({ boards }: Props) {
     if (board) window.history.replaceState(null, "", pageUrl(params));
   }, [board, params]);
 
-  const entries = useMemo(
-    () => (board?.rows ?? []).map((row) => fromIndexRow(row, labels[rowKey({ boardToken: row[3], id: row[0] })])),
-    [board, labels],
+  const toEntry = useCallback(
+    (row: IndexRow) => fromIndexRow(row, labels[rowKey({ boardToken: row[3], id: row[0] })]),
+    [labels],
   );
+  const entries = useMemo(() => (board?.rows ?? []).map(toEntry), [board, toEntry]);
   const shownParams = useDeferredValue(params);
   const { jobs: results, total, companies: companiesInResults } = useMemo(() => {
     const presetRows = shownParams.preset ? board?.presets[shownParams.preset] ?? [] : null;
-    return searchJobs(presetRows ? presetRows.map((row) => fromIndexRow(row)) : entries, shownParams);
-  }, [board, entries, shownParams]);
+    return searchJobs(presetRows ? presetRows.map(toEntry) : entries, shownParams);
+  }, [board, entries, shownParams, toEntry]);
 
   const companyCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -260,6 +266,18 @@ export function JobDashboard({ boards }: Props) {
   const resetFilters = useCallback(() => {
     setParams({ ...defaultSearchParams });
   }, []);
+
+  async function correctLabel(job: JobListItem, label: string) {
+    setCorrecting(null);
+    const key = rowKey(job);
+    const response = await fetch("/api/judge", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key, label, title: job.title, company: job.company }),
+    }).catch(() => null);
+    setCorrectionFailed(!response?.ok);
+    if (response?.ok) setLabels((current) => ({ ...current, [key]: label }));
+  }
 
   function toggleLocation(location: string) {
     const adding = !params.locations.includes(location);
@@ -886,6 +904,12 @@ export function JobDashboard({ boards }: Props) {
                 The judge stopped early. Unscored roles use the title rules until your next visit.
               </p>
             ) : null}
+            {correctionFailed ? (
+              <p className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-5 py-3 text-xs font-semibold text-amber-900">
+                <Icon name="alert-triangle" className="h-4 w-4 shrink-0" />
+                That correction was not saved. Sign in on the Outreach page and try again.
+              </p>
+            ) : null}
             {isOverADayOld(board.fetchedAt) ? (
               <p className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-5 py-3 text-xs font-semibold text-amber-900">
                 <Icon name="alert-triangle" className="h-4 w-4 shrink-0" />
@@ -907,6 +931,27 @@ export function JobDashboard({ boards }: Props) {
                           <span aria-hidden="true" className="badge-dot bg-current opacity-60" />
                           {job.badgeLabel}
                         </span>
+                        {signedIn && correcting === rowKey(job) ? (
+                          <select
+                            aria-label={`Correct label for ${job.title}`}
+                            autoFocus
+                            className="input h-7 w-auto py-0 text-xs"
+                            onBlur={() => setCorrecting(null)}
+                            onChange={(event) => void correctLabel(job, event.target.value)}
+                            value=""
+                          >
+                            <option disabled value="">Correct label…</option>
+                            {judgeLabels.map((label) => <option key={label} value={label}>{label}</option>)}
+                          </select>
+                        ) : signedIn ? (
+                          <button
+                            className="text-[11px] font-semibold text-slate-400 transition-colors hover:text-sky-800"
+                            onClick={() => setCorrecting(rowKey(job))}
+                            type="button"
+                          >
+                            Wrong label?
+                          </button>
+                        ) : null}
                       </div>
                       <h3 className="mt-2">
                         <a
