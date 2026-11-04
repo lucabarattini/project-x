@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { wilson } from "../../app/judge/charts";
 import { judgeInstructions, labelSide, summarizeCorrections } from "./judge";
 
 test("corrections join the prompt as examples, newest twenty only", () => {
@@ -27,4 +28,11 @@ test("the report counts only corrections that overruled the judge", () => {
   assert.deepEqual(overruled.map(({ key }) => key), ["a", "b"]);
   assert.equal(wrongPage, 1);
   assert.equal(labelSide("Manual & Field Operations"), "neither");
+});
+
+test("the Wilson interval matches the textbook value and stays inside 0 to 1", () => {
+  const { low, high } = wilson(5, 10);
+  assert.ok(Math.abs(low - 0.2366) < 0.001 && Math.abs(high - 0.7634) < 0.001);
+  assert.equal(wilson(0, 10).low, 0);
+  assert.deepEqual(wilson(0, 0), { low: 0, high: 0 });
 });

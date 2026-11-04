@@ -24,6 +24,9 @@ export default function Home() {
             <a className="btn btn-ghost !min-h-10 !px-3 !text-sm" href="/outreach">
               Outreach
             </a>
+            <a className="btn btn-ghost !min-h-10 !px-3 !text-sm" href="/judge">
+              Judge
+            </a>
           </nav>
         </div>
       </header>
