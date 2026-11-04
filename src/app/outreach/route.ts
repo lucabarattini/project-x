@@ -39,6 +39,8 @@ type Contact = {
   dropped?: string;
   // How close the role is to Gemma's path, ranked within the company (1 = write first).
   fit?: { rank: number; function: string; open: string[] };
+  // Decision makers for the Shopify FP&A push, listed in their own section instead of under Shopify.
+  track?: "director" | "recruiter";
 };
 
 function sessionToken() {
@@ -98,10 +100,21 @@ async function readContacts(): Promise<Contact[]> {
 }
 
 // The companies Gemma is writing to right now; everyone else sits in the collapsed "On hold" list.
-const currentCompanies = ["Voleon", "Starbucks", "Nordstrom", "DoorDash", "Expedia", "Crusoe"];
+const currentCompanies = ["Shopify", "Voleon", "Starbucks", "Nordstrom", "DoorDash", "Expedia", "Crusoe"];
+
+// The one opening the Shopify push is about, and who decides on it.
+const shopifyRole: [title: string, url: string] = [
+  "Senior Financial Analyst - Multiple Roles (FP&A: Commercial Finance, Merchant Services, Corporate FP&A; hires FA and SFA; remote Americas)",
+  "https://www.shopify.com/careers?ashby_jid=40ef1cb0-5c56-4963-84fe-946708e5d74a",
+];
+const tracks: Array<[track: NonNullable<Contact["track"]>, heading: string]> = [
+  ["director", "Directors"],
+  ["recruiter", "HR / recruiters"],
+];
 
 // The openings each current company is being contacted about, shown under its heading.
 const targetRoles: Record<string, Array<[title: string, url: string]>> = {
+  Shopify: [shopifyRole],
   Voleon: [["Tax Associate (remote, 1 yr)", "https://jobs.ashbyhq.com/voleon/8bcefe9b-6061-4951-96c5-eb9dec3994a1"]],
   Starbucks: [
     ["Supply Planner, Global Supply Chain", "https://apply.starbucks.com/careers/job/481080986214"],
@@ -116,16 +129,17 @@ const targetRoles: Record<string, Array<[title: string, url: string]>> = {
 
 // Companies keep their priority order; inside each one: replied, waiting on a reply, bounced, not sent yet,
 // and within each of those, the best role fit first. Each company opens with a heading row as a break.
-function contactTable(contacts: Contact[]) {
-  const companies = [...new Set(contacts.map((contact) => contact.company))];
+// Grouped by company by default; the Shopify section groups by track (directors, recruiters) instead.
+function contactTable(contacts: Contact[], groupOf: (contact: Contact) => string = (contact) => contact.company) {
+  const groups = [...new Set(contacts.map(groupOf))];
   const stage = (contact: Contact) => (contact.repliedAt ? 0 : contact.bouncedAt ? 2 : contact.sentAt ? 1 : 3);
-  const rows = companies.map((company) => {
-    const people = contacts.filter((contact) => contact.company === company)
+  const rows = groups.map((group) => {
+    const people = contacts.filter((contact) => groupOf(contact) === group)
       .sort((a, b) => stage(a) - stage(b) || (a.fit?.rank ?? 99) - (b.fit?.rank ?? 99));
     const drafted = people.filter((contact) => contact.status?.startsWith("in Gmail drafts")).length;
-    const roles = (targetRoles[company] ?? []).map(([title, url]) => `<a href="${escape(url)}" target="_blank" rel="noreferrer">${escape(title)}</a>`).join(" · ");
-    const heading = `<tr><td colspan="8" style="border:none;padding:22px 8px 6px"><b style="font-size:16px">${escape(company)}</b> <small>${people.length} people${drafted ? ` · ${drafted} in Gmail drafts` : ""}</small>${roles ? `<br><small>Openings: ${roles}</small>` : ""}</td></tr>`;
-    return heading + people.map((contact, index) => `<tr style="background:${companyColors[company] ?? "#fff"}">
+    const roles = (targetRoles[group] ?? []).map(([title, url]) => `<a href="${escape(url)}" target="_blank" rel="noreferrer">${escape(title)}</a>`).join(" · ");
+    const heading = `<tr><td colspan="8" style="border:none;padding:22px 8px 6px"><b style="font-size:16px">${escape(group)}</b> <small>${people.length} people${drafted ? ` · ${drafted} in Gmail drafts` : ""}</small>${roles ? `<br><small>Openings: ${roles}</small>` : ""}</td></tr>`;
+    return heading + people.map((contact, index) => `<tr style="background:${companyColors[contact.company] ?? "#fff"}">
 <td>${index + 1}</td>
 <td><a href="${escape(contact.linkedin)}" target="_blank" rel="noreferrer">${escape(contact.name)}</a><br><small>${escape(contact.title)} · ${escape(contact.location)}</small></td>
 <td><b>${escape(contact.hook)}</b>${contact.fit ? `<br><small>fit #${contact.fit.rank} · ${escape(contact.fit.function)}</small>` : ""}</td>
@@ -141,12 +155,19 @@ function contactTable(contacts: Contact[]) {
 
 export async function GET(request: Request) {
   if (!isSignedIn(request)) return loginForm();
-  const listed = (await readContacts()).filter((contact) => !contact.dropped);
+  const all = (await readContacts()).filter((contact) => !contact.dropped);
+  const tracked = tracks.flatMap(([track]) => all.filter((contact) => contact.track === track));
+  const listed = all.filter((contact) => !contact.track);
   const current = currentCompanies.flatMap((company) => listed.filter((contact) => contact.company === company));
   const onHold = listed.filter((contact) => !currentCompanies.includes(contact.company));
   const onHoldCompanies = [...new Set(onHold.map((contact) => contact.company))];
+  const trackHeading = new Map(tracks);
   return page(`<h1>Outreach for Gemma</h1>
-${dashboard([...current, ...onHold])}
+${dashboard([...tracked, ...current, ...onHold])}
+<h2>Shopify: who decides on the Financial Analyst opening</h2>
+<p><small>Opening: <a href="${escape(shopifyRole[1])}" target="_blank" rel="noreferrer">${escape(shopifyRole[0])}</a><br>
+Order: Kathryn's referral and application first, then directors citing it. Ask Kathryn which recruiter hired her.</small></p>
+${contactTable(tracked, (contact) => trackHeading.get(contact.track!) ?? "")}
 <h2>Current outbound</h2>
 ${contactTable(current)}
 <details style="margin-top:40px"><summary style="cursor:pointer;font-size:18px;font-weight:600">On hold <small>${onHold.length} people · ${escape(onHoldCompanies.join(", "))}</small></summary>
