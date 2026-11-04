@@ -70,12 +70,6 @@ function SiteHeader({ portal }: { portal: PortalId }) {
           <a className="btn btn-ghost !min-h-10 !px-3 !text-sm" href="/outreach">
             Outreach
           </a>
-          <a className="btn btn-ghost hidden !min-h-10 !px-3 !text-sm md:inline-flex" href="/api/jobs">
-            JSON feed
-          </a>
-          <a className="btn btn-ghost hidden !min-h-10 !px-3 !text-sm md:inline-flex" href="/job-boards.csv">
-            CSV
-          </a>
           <ThemeToggle />
         </nav>
       </div>
@@ -269,10 +263,6 @@ function SiteFooter() {
           This site is not affiliated with or endorsed by LinkedIn or any of the listed companies.
           Data is fetched directly from official ATS career pages.
         </p>
-        <div className="flex flex-wrap gap-4">
-          <a className="font-semibold text-slate-700 dark:text-slate-300 hover:text-sky-800 dark:hover:text-sky-300" href="/api/jobs">JSON feed</a>
-          <a className="font-semibold text-slate-700 dark:text-slate-300 hover:text-sky-800 dark:hover:text-sky-300" href="/job-boards.csv">Board CSV</a>
-        </div>
       </div>
     </footer>
   );

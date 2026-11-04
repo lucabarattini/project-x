@@ -7,10 +7,7 @@ import {
   compactExperienceEvidence,
   experienceBadge,
   extractExperienceRequirement,
-  extractMinYearsExperience,
   matchesExperienceFilter,
-  matchesRoleTypeFilter,
-  portalAudience,
 } from "./display.ts";
 
 test("companyInitials returns stable short labels", () => {
@@ -113,7 +110,6 @@ test("classifyTechnicalRole routes manual and field labour to Manual & Field Ope
       `expected "${title}" to classify as Manual & Field Operations`,
     );
   }
-  assert.deepEqual(portalAudience("Manual & Field Operations"), []);
 });
 
 test("classifyTechnicalRole routes business roles to Non-Technical", () => {
@@ -221,12 +217,6 @@ test("classifyNonTechnicalRole splits design from marketing and maps chief of st
   assert.equal(classifyNonTechnicalRole("Chief of Staff"), "Operations & Supply Chain");
 });
 
-test("portalAudience puts analytics on both portals", () => {
-  assert.deepEqual(portalAudience("Analytics & Business Intelligence"), ["tech", "non-tech"]);
-  assert.deepEqual(portalAudience("Data Science"), ["tech"]);
-  assert.deepEqual(portalAudience("Manual & Field Operations"), []);
-});
-
 test("classifyTechnicalRole catches Amazon abbreviated SWE titles", () => {
   for (const title of [
     "Software Dev Engineer",
@@ -244,14 +234,14 @@ test("classifyTechnicalRole catches Amazon abbreviated SWE titles", () => {
 });
 
 test("extractExperienceRequirement finds required year requirements", () => {
-  assert.equal(extractMinYearsExperience("Requires 2+ years of experience"), 2);
-  assert.equal(extractMinYearsExperience("You have 1-3 years building products"), 1);
-  assert.equal(extractMinYearsExperience("At least three years of relevant work"), 3);
+  assert.equal(extractExperienceRequirement("Requires 2+ years of experience").effectiveMinYears, 2);
+  assert.equal(extractExperienceRequirement("You have 1-3 years building products").effectiveMinYears, 1);
+  assert.equal(extractExperienceRequirement("At least three years of relevant work").effectiveMinYears, 3);
   assert.equal(
-    extractMinYearsExperience("Minimum qualifications: 2 years. Preferred qualifications: 7 years."),
+    extractExperienceRequirement("Minimum qualifications: 2 years. Preferred qualifications: 7 years.").effectiveMinYears,
     2,
   );
-  assert.equal(extractMinYearsExperience("No explicit years listed"), null);
+  assert.equal(extractExperienceRequirement("No explicit years listed").effectiveMinYears, null);
 });
 
 test("extractExperienceRequirement separates preferred-only evidence", () => {
@@ -380,12 +370,6 @@ test("principal titles are always treated as very senior", () => {
   assert.equal(matchesExperienceFilter(conflicting, "Principal Applied Scientist", "conflicting"), false);
   assert.equal(matchesExperienceFilter(notStated, "Principal Something", "senior"), true);
   assert.match(experienceBadge(notStated, "Principal Something").label, /Very Senior/u);
-});
-
-test("matchesRoleTypeFilter uses the positive technical taxonomy", () => {
-  assert.equal(matchesRoleTypeFilter("Software Engineer", "Software Engineering"), true);
-  assert.equal(matchesRoleTypeFilter("Account Executive", "Software Engineering"), false);
-  assert.equal(matchesRoleTypeFilter("Localization Specialist", "Needs Review"), true);
 });
 
 test("security titles classify as Security Engineering even when named 'Analyst'", () => {

@@ -198,44 +198,19 @@ export function parseGoogleJobsHtml(html: string) {
   return jobs;
 }
 
-export function parseGoogleDatePostedHtml(html: string) {
-  const scripts = [
-    ...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/giu),
-  ];
-
-  for (const script of scripts) {
-    try {
-      const data = JSON.parse(decodeHtml(script[1]).trim()) as unknown;
-      const nodes = Array.isArray(data) ? data : [data];
-
-      for (const node of nodes) {
-        if (
-          node &&
-          typeof node === "object" &&
-          "datePosted" in node &&
-          typeof node.datePosted === "string"
-        ) {
-          return node.datePosted;
-        }
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  const fallback = html.match(/"datePosted"\s*:\s*"(\d{4}-\d{2}-\d{2}(?:T[^"]+)?)"/iu)?.[1];
-  return fallback ?? null;
-}
-
 async function fetchGooglePage(page: number) {
+  // Not through Next's data cache: the snapshot already caches the result, and
+  // inside the server cached reads of these 1.4 MB pages hung past their 15 s
+  // abort (6 of 12 pages never landed on 2026-10-30) until the provider's 60 s
+  // timeout dropped all of Google, while the same fetches take 0.5 s uncached.
   const response = await fetch(googlePageUrl(page), {
+    cache: "no-store",
     signal: AbortSignal.timeout(15_000),
     headers: {
       accept: "text/html,application/xhtml+xml",
       "accept-language": "en-US,en;q=0.9",
       "user-agent": "Mozilla/5.0",
     },
-    next: { revalidate: 300 },
   });
 
   if (!response.ok) {

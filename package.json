@@ -8,15 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx --test $(find src -name '*.test.ts' -print)",
-    "generate:logos": "node scripts/generate-company-logos.mjs",
-    "verify:posted-dates": "node scripts/verify-posted-dates.mjs",
-    "verify:google-dates": "tsx scripts/verify-google-posted-dates.ts"
+    "generate:logos": "node scripts/generate-company-logos.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.8.0",
-    "exceljs": "^4.4.0",
-    "next": "16.3.0",
+    "next": "^16.4.2",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -26,7 +23,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.0",
+    "eslint-config-next": "^16.4.3",
     "sharp": "^0.35.3",
     "simple-icons": "^16.28.0",
     "tailwindcss": "^4",

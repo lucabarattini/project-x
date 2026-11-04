@@ -17,7 +17,6 @@ import {
 import {
   matchesExperienceFilter,
   nonTechnicalFamilies,
-  nonTechnicalFamilyOptions,
   type ExperienceFilter,
   type NonTechnicalFamily,
   type RoleTypeFilter,
@@ -267,12 +266,6 @@ const experienceOrder: Record<string, number> = {
 function encodeCursor(offset: number) {
   return btoa(`o:${offset}`).replace(/=+$/u, "");
 }
-
-export function nonTechnicalFamilyId(family: NonTechnicalFamily) {
-  return nonTechnicalFamilyIds[family];
-}
-
-export { nonTechnicalFamilyOptions };
 
 export function decodeCursor(cursor: string | null | undefined): number {
   if (!cursor) return 0;

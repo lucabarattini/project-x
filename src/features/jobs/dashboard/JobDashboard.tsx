@@ -20,7 +20,6 @@ import {
   type JobSearchResult,
   type PortalId,
   defaultSearchParams,
-  nonTechnicalFamilyOptions,
   pageUrl,
   searchJobs,
   serializeSearchParams,
@@ -29,6 +28,7 @@ import { locationFilters, type DateFilter, type JobSortKey } from "../filters";
 import { searchPresets } from "../presets";
 import {
   nonTechnicalFamilies,
+  nonTechnicalFamilyOptions,
   type ExperienceFilter,
   type NonTechnicalFamily,
   type RoleTypeFilter,
@@ -780,9 +780,6 @@ export function JobDashboard({
                 <option value="title">Role title</option>
               </select>
             </div>
-            <a className="btn btn-secondary !min-h-11 !px-3" href="/job-boards.csv">
-              <Icon name="download" className="h-4 w-4" /> CSV
-            </a>
             <button
               aria-expanded={filtersOpen}
               className="btn btn-primary lg:hidden"

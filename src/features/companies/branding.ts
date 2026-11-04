@@ -40,6 +40,3 @@ export function companyLogoPath(company: string) {
   return companyBrand(company)?.logoPath ?? null;
 }
 
-export function companyDomain(company: string) {
-  return companyBrand(company)?.domain ?? null;
-}

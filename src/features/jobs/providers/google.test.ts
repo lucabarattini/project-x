@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  parseGoogleDatePostedHtml,
   parseGoogleJobsHtml,
   parseGoogleJobsPayloadHtml,
 } from "./google.ts";
@@ -72,17 +71,3 @@ test("parseGoogleJobsPayloadHtml fails closed when Google changes the payload", 
   );
 });
 
-test("parseGoogleDatePostedHtml reads JSON-LD datePosted when present", () => {
-  const html = `
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "JobPosting",
-        "title": "Strategy Associate",
-        "datePosted": "2026-06-15"
-      }
-    </script>
-  `;
-
-  assert.equal(parseGoogleDatePostedHtml(html), "2026-06-15");
-});

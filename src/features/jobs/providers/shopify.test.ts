@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decodeTurboStream, parseShopifyCareers, parseShopifyDescription } from "./shopify";
+import { decodeTurboStream, parseShopifyCareers, parseShopifyPosting } from "./shopify";
 
 // The careers page ships its React Router loader data as a turbo-stream inside
 // streamController.enqueue("…"): a flat array of values referenced by index.
@@ -39,9 +39,47 @@ test("parseShopifyCareers keeps listed postings and marks them remote by region"
   assert.equal(jobs[0].url, "https://www.shopify.com/careers?ashby_jid=abc");
 });
 
+// Since late October 2026 the list carries only a summary per posting; the date moved to the posting's page.
+const summaries = page([
+  { _1: 2 },
+  "roles",
+  [3],
+  { _4: 5, _6: 7, _8: 9, _10: 11, _12: 13 },
+  "id", "40ef1cb0",
+  "title", "Senior Financial Analyst - Multiple Roles",
+  "location", "Remote - Americas",
+  "discipline", "Finance",
+  "href", "/careers/senior-financial-analyst-multiple-roles_40ef1cb0",
+]);
+
+test("parseShopifyCareers reads the summary-only list and links each posting's page", () => {
+  const jobs = parseShopifyCareers(summaries);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].id, "shopify-40ef1cb0");
+  assert.equal(jobs[0].location, "Remote - Americas");
+  assert.equal(jobs[0].team, "Finance");
+  assert.equal(jobs[0].postedAt, null);
+  assert.equal(jobs[0].url, "https://www.shopify.com/careers/senior-financial-analyst-multiple-roles_40ef1cb0");
+});
+
+test("parseShopifyPosting reads the date and description from the posting's page", () => {
+  const html = page([
+    { _1: 2 }, "jobPosting", { _3: 4, _5: 6, _7: 8 },
+    "descriptionPlain", "Multiple Financial Analysts and Senior Financial Analysts.",
+    "publishedDate", "2025-10-22",
+    "employmentType", "FullTime",
+  ]);
+  assert.deepEqual(parseShopifyPosting(html), {
+    description: "Multiple Financial Analysts and Senior Financial Analysts.",
+    postedAt: "2025-10-22",
+    team: null,
+    employmentType: "FullTime",
+  });
+});
+
 test("parseShopifyDescription reads the posting's own page", () => {
   const html = page([{ _1: 2 }, "posting", { _3: 4 }, "descriptionHtml", "<p>You have 1-3 years of experience.</p>"]);
-  assert.equal(parseShopifyDescription(html), "You have 1-3 years of experience.");
+  assert.equal(parseShopifyPosting(html).description, "You have 1-3 years of experience.");
 });
 
 test("a page without loader data yields nothing", () => {

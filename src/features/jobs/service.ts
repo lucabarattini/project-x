@@ -36,21 +36,6 @@ import {
 export type JobBoard = GreenhouseBoard;
 export type Job = SearchJob;
 
-export interface JobProvider {
-  id: string;
-  fetchJobs(board: BoardConfig): Promise<Job[]>;
-}
-
-export type BoardConfig = {
-  company: string;
-  provider: string;
-  careersUrl: string;
-  endpointOrSlug: string;
-  evidenceUrl: string;
-  verifiedAt: string;
-  status: "live" | "discovered" | "blocked";
-};
-
 export const jobBoards: JobBoard[] = [
   ...greenhouseBoards,
   ...ashbyBoards,
@@ -190,9 +175,12 @@ function buildProviders(options: FetchJobsOptions): ProviderRun[] {
       run: () => fetchLatestLeverJobs(),
     },
     {
+      // Seven tenants paged in parallel, Nordstrom's at ~7 s a page. A quiet
+      // build already takes ~17 s, so 20 s timed the whole provider out
+      // whenever the connection was busy.
       provider: "workday",
       tokens: workdayBoards.map((board) => board.token),
-      timeoutMs: 20_000,
+      timeoutMs: 35_000,
       run: () => fetchLatestWorkdayJobs(),
     },
     {
@@ -286,7 +274,7 @@ async function buildSnapshotInternal(): Promise<JobSnapshot> {
     const providerFailed = result.diagnostic.status === "error" || result.diagnostic.status === "timeout";
     const tokens = new Set(providerFailed ? providers[index].tokens : []);
     const companies = new Set(result.failedBoards);
-    const kept = (moduleSnapshot?.entries ?? []).filter(
+    const kept = (shared.snapshot?.entries ?? []).filter(
       (entry) => tokens.has(entry.job.boardToken) || companies.has(entry.job.company),
     );
     if (kept.length === 0) return;
@@ -327,8 +315,8 @@ async function buildSnapshotInternal(): Promise<JobSnapshot> {
     // Capped so the build still lands inside the function's limit: uncapped,
     // Apple's pages and detail reads pushed it past the limit, the function
     // was killed before storing, and every visit served a snapshot hours old.
-    presets: await withTimeout(resolvePresets(entries, moduleSnapshot?.presets), 25_000)
-      .catch(() => moduleSnapshot?.presets),
+    presets: await withTimeout(resolvePresets(entries, shared.snapshot?.presets), 25_000)
+      .catch(() => shared.snapshot?.presets),
   };
 }
 
@@ -385,43 +373,74 @@ async function buildVerifiedSnapshot(): Promise<JobSnapshot> {
   const reason = snapshotRejectionReason(
     snapshot.entries.length,
     snapshot.diagnostics,
-    lastGoodEntryCount,
+    shared.lastGoodEntryCount,
   );
   if (reason) {
-    unusableRebuildAt = Date.now();
+    shared.unusableRebuildAt = Date.now();
     throw new UnusableSnapshotError(snapshot, reason);
   }
-  lastGoodEntryCount = snapshot.entries.length;
-  unusableRebuildAt = 0;
+  shared.lastGoodEntryCount = snapshot.entries.length;
+  shared.unusableRebuildAt = 0;
   return snapshot;
 }
 
-/**
- * Entry count of the last snapshot known to be real. The guard above compares
- * a fresh build against it, so it is refreshed both from a successful build and
- * from the stored snapshot — a cold instance that has never built anything
- * still knows how big the board is supposed to be.
- */
-let lastGoodEntryCount = 0;
+type SnapshotState = {
+  /** The snapshot this process serves. */
+  snapshot: JobSnapshot | null;
+  /**
+   * Entry count of the last snapshot known to be real. The guard above compares
+   * a fresh build against it, so it is refreshed both from a successful build and
+   * from the stored snapshot — a cold instance that has never built anything
+   * still knows how big the board is supposed to be.
+   */
+  lastGoodEntryCount: number;
+  /**
+   * When a rebuild comes back unusable, stop attempting another one on every
+   * request. The sources that refused us keep refusing for a while, each attempt
+   * costs a full eleven-provider fan-out, and the visitor waits through all of it
+   * only to be served the fallback anyway.
+   */
+  unusableRebuildAt: number;
+  build: Promise<JobSnapshot> | null;
+  refresh: Promise<void> | null;
+  /**
+   * The cold-start read of the stored snapshot, shared like the build: the
+   * startup hook and the first request both arrive here, and a second read
+   * sent with the first one's etag gets a 304, finds nothing yet, and blocks
+   * on a full rebuild.
+   */
+  load: Promise<JobSnapshot | null> | null;
+  blobEtag: string | undefined;
+};
 
 /**
- * When a rebuild comes back unusable, stop attempting another one on every
- * request. The sources that refused us keep refusing for a while, each attempt
- * costs a full eleven-provider fan-out, and the visitor waits through all of it
- * only to be served the fallback anyway.
+ * One snapshot and at most one build per server process. Next bundles the page,
+ * each route handler and the startup hook separately, and every bundle gets its
+ * own copy of this module: with plain module variables each one kept its own
+ * snapshot and started its own full rebuild, so a cold local server ran two or
+ * three fan-outs at once over one connection and healthy sources timed out
+ * (9 of 13 on the page, 11 of 13 for the API's build minutes later). The state
+ * therefore lives on globalThis, which all the bundles share.
  */
-let unusableRebuildAt = 0;
+const shared = ((globalThis as typeof globalThis & { __jobSnapshotState?: SnapshotState }).__jobSnapshotState ??= {
+  snapshot: null,
+  lastGoodEntryCount: 0,
+  unusableRebuildAt: 0,
+  build: null,
+  refresh: null,
+  load: null,
+  blobEtag: undefined,
+});
+
 const rebuildRetryCooldownMs = 2 * 60 * 1000;
 
-let snapshotBuild: Promise<JobSnapshot> | null = null;
-
 function ensureSnapshotBuild(): Promise<JobSnapshot> {
-  if (!snapshotBuild) {
-    snapshotBuild = buildVerifiedSnapshot().finally(() => {
-      snapshotBuild = null;
+  if (!shared.build) {
+    shared.build = buildVerifiedSnapshot().finally(() => {
+      shared.build = null;
     });
   }
-  return snapshotBuild;
+  return shared.build;
 }
 
 /**
@@ -432,7 +451,6 @@ function ensureSnapshotBuild(): Promise<JobSnapshot> {
  * snapshot (a few MB of the 1 GB plan) however often it is written.
  */
 const snapshotBlobPath = "snapshot/latest.json.gz";
-let snapshotBlobEtag: string | undefined;
 
 /** The stored snapshot, or null when there is none, it is the copy this instance already holds, or no store is configured (local dev). */
 async function readStoredSnapshot(): Promise<JobSnapshot | null> {
@@ -440,13 +458,13 @@ async function readStoredSnapshot(): Promise<JobSnapshot | null> {
     const result = await get(snapshotBlobPath, {
       access: "private",
       useCache: false,
-      ifNoneMatch: snapshotBlobEtag,
+      ifNoneMatch: shared.blobEtag,
     });
     if (result?.statusCode !== 200) return null;
-    snapshotBlobEtag = result.blob.etag;
+    shared.blobEtag = result.blob.etag;
     const gzipped = Buffer.from(await new Response(result.stream).arrayBuffer());
     const snapshot = JSON.parse(gunzipSync(gzipped).toString("utf8")) as JobSnapshot;
-    lastGoodEntryCount = Math.max(lastGoodEntryCount, snapshot.entries.length);
+    shared.lastGoodEntryCount = Math.max(shared.lastGoodEntryCount, snapshot.entries.length);
     return snapshot;
   } catch {
     return null;
@@ -461,13 +479,11 @@ async function storeSnapshot(snapshot: JobSnapshot) {
       allowOverwrite: true,
       contentType: "application/gzip",
     });
-    snapshotBlobEtag = result.etag;
+    shared.blobEtag = result.etag;
   } catch {
     // Persisting is best-effort; this instance still serves the new board.
   }
 }
-
-let moduleSnapshot: JobSnapshot | null = null;
 
 function isFresh(snapshot: JobSnapshot) {
   return Date.now() - Date.parse(snapshot.fetchedAt) < snapshotTtlMs;
@@ -480,28 +496,31 @@ function isFresh(snapshot: JobSnapshot) {
  * been written blocks on a build.
  */
 export async function getSnapshot(): Promise<JobSnapshot> {
-  if (moduleSnapshot && isFresh(moduleSnapshot)) {
-    return moduleSnapshot;
+  if (shared.snapshot && isFresh(shared.snapshot)) {
+    return shared.snapshot;
   }
-  moduleSnapshot ??= await readStoredSnapshot();
-  if (!moduleSnapshot) {
+  if (!shared.snapshot) {
+    shared.load ??= readStoredSnapshot().finally(() => {
+      shared.load = null;
+    });
+    shared.snapshot ??= await shared.load;
+  }
+  if (!shared.snapshot) {
     return rebuildSnapshot(null);
   }
-  if (Date.now() - unusableRebuildAt >= rebuildRetryCooldownMs) {
+  if (Date.now() - shared.unusableRebuildAt >= rebuildRetryCooldownMs) {
     refreshAfterResponse();
   }
-  return moduleSnapshot;
+  return shared.snapshot;
 }
 
-let snapshotRefresh: Promise<void> | null = null;
-
 function refreshAfterResponse() {
-  snapshotRefresh ??= refreshSnapshot()
+  shared.refresh ??= refreshSnapshot()
     .catch(() => undefined)
     .finally(() => {
-      snapshotRefresh = null;
+      shared.refresh = null;
     });
-  const pending = snapshotRefresh;
+  const pending = shared.refresh;
   try {
     after(() => pending);
   } catch {
@@ -516,14 +535,14 @@ function refreshAfterResponse() {
  */
 async function refreshSnapshot() {
   const stored = await head(snapshotBlobPath).catch(() => null);
-  if (stored && stored.etag !== snapshotBlobEtag && Date.now() - stored.uploadedAt.getTime() < snapshotTtlMs) {
+  if (stored && stored.etag !== shared.blobEtag && Date.now() - stored.uploadedAt.getTime() < snapshotTtlMs) {
     const snapshot = await readStoredSnapshot();
     if (snapshot && isFresh(snapshot)) {
-      moduleSnapshot = snapshot;
+      shared.snapshot = snapshot;
       return;
     }
   }
-  await rebuildSnapshot(moduleSnapshot);
+  await rebuildSnapshot(shared.snapshot);
 }
 
 /**
@@ -540,16 +559,16 @@ async function refreshSnapshot() {
 async function rebuildSnapshot(fallback: JobSnapshot | null): Promise<JobSnapshot> {
   try {
     const snapshot = await ensureSnapshotBuild();
-    moduleSnapshot = snapshot;
-    unusableRebuildAt = 0;
+    shared.snapshot = snapshot;
+    shared.unusableRebuildAt = 0;
     await storeSnapshot(snapshot);
     return snapshot;
   } catch (error) {
     if (!(error instanceof UnusableSnapshotError)) {
       throw error;
     }
-    unusableRebuildAt = Date.now();
-    const previous = fallback ?? moduleSnapshot;
+    shared.unusableRebuildAt = Date.now();
+    const previous = fallback ?? shared.snapshot;
     if (previous) {
       return { ...previous, diagnostics: error.snapshot.diagnostics };
     }
@@ -557,11 +576,6 @@ async function rebuildSnapshot(fallback: JobSnapshot | null): Promise<JobSnapsho
     // honestly rather than rendering an empty board as if it were a result.
     return error.snapshot;
   }
-}
-
-export async function fetchLatestJobs(): Promise<Job[]> {
-  const snapshot = await getSnapshot();
-  return snapshot.entries.map((entry) => entry.job);
 }
 
 /**

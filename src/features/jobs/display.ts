@@ -545,10 +545,6 @@ export function extractExperienceRequirement(text: string): ExperienceRequiremen
   };
 }
 
-export function extractMinYearsExperience(text: string) {
-  return extractExperienceRequirement(text).effectiveMinYears;
-}
-
 function compactEvidenceSentence(rawText: string) {
   const normalized = normalizeWhitespace(rawText);
   const maxLength = 1_200;
@@ -657,14 +653,6 @@ export function experienceBadge(requirement: ExperienceRequirement, title = "") 
   return { label: "6+ Years", className: "border-rose-200 bg-rose-50 text-rose-800", dotClassName: "bg-rose-500" };
 }
 
-export function experienceLabel(requirement: ExperienceRequirement, title = "") {
-  const badge = experienceBadge(requirement, title);
-  const firstEvidence = requirement.evidence[0];
-  return firstEvidence
-    ? `${badge.label} · ${firstEvidence.section} · ${firstEvidence.rawText}`
-    : badge.label;
-}
-
 export function matchesExperienceFilter(
   requirement: ExperienceRequirement,
   title: string,
@@ -700,14 +688,6 @@ export function matchesExperienceFilter(
   }
 
   return minYears >= 6 || hasSeniorOrManagerSignal(title);
-}
-
-export function matchesRoleTypeFilter(title: string, filter: RoleTypeFilter) {
-  if (filter === "all") {
-    return true;
-  }
-
-  return classifyTechnicalRole(title).matchedCategory === filter;
 }
 
 const nonTechnicalFamilyPatterns: Array<{
@@ -874,23 +854,6 @@ export function classifyNonTechnicalRole(title: string): NonTechnicalFamily {
     }
   }
   return "Other";
-}
-
-/**
- * The job's portal audience. Technical families belong to the technical
- * portal; non-technical and operations roles belong to the non-technical
- * portal; unmatched roles are discoverable on both via Needs Review.
- */
-export function portalAudience(
-  category: TechnicalTrack,
-): Array<"tech" | "non-tech"> {
-  if (category === "Manual & Field Operations") return [];
-  if (category === "Needs Review") return ["tech", "non-tech"];
-  if (category === "Analytics & Business Intelligence") return ["tech", "non-tech"];
-  if (category === "Non-Technical" || category === "Operations & Support") {
-    return ["non-tech"];
-  }
-  return ["tech"];
 }
 
 export function companyInitials(company: string) {

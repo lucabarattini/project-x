@@ -80,29 +80,47 @@ function findRecords(root: unknown, matches: (record: Record<string, unknown>) =
 
 const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
 
-/** Every listed posting on shopify.com/careers. All of them are remote, pinned to a region. */
+/**
+ * Every listed posting on shopify.com/careers. All of them are remote, pinned to a region.
+ *
+ * Until late October 2026 each listing was the full Ashby posting (externalLink,
+ * publishedDate, teamName). The page now lists only id, title, a ready-made
+ * "Remote - Americas" location, a discipline and an href to the posting's own
+ * page, which is where the date and description went. Both shapes are read.
+ * A summary needs its id: the page also carries title-and-href cards for
+ * programs (Dev Degree, internships) that are not postings.
+ */
 export function parseShopifyCareers(html: string): Listing[] {
-  return findRecords(decodeTurboStream(html), (record) => Boolean(text(record.externalLink) && text(record.title)))
+  return findRecords(decodeTurboStream(html), (record) => Boolean(
+    text(record.title) && (text(record.externalLink) || (text(record.id) && text(record.href))),
+  ))
     .filter((record) => record.isListed !== false)
     .map((record) => {
       const region = text(record.locationName) ?? "Not listed";
+      const href = text(record.href);
+      const url = text(record.externalLink) ?? (href ? new URL(href, shopifyBoards[0].boardUrl).href : shopifyBoards[0].boardUrl);
       return {
-        id: `shopify-${text(record.id) ?? text(record.externalLink)}`,
+        id: `shopify-${text(record.id) ?? url}`,
         title: text(record.title) ?? "Untitled",
-        team: text(record.teamName),
+        team: text(record.teamName) ?? text(record.discipline),
         employmentType: text(record.employmentType),
-        location: record.workplaceType === "Remote" ? `Remote - ${region}` : region,
+        location: text(record.location) ?? (record.workplaceType === "Remote" ? `Remote - ${region}` : region),
         postedAt: text(record.publishedDate),
-        url: text(record.externalLink) ?? shopifyBoards[0].boardUrl,
+        url,
       };
     });
 }
 
-/** The description on a posting's own page, which carries the years of experience. */
-export function parseShopifyDescription(html: string) {
+/** A posting's own page: the description, which carries the years of experience, and the publish date. */
+export function parseShopifyPosting(html: string) {
   const [record] = findRecords(decodeTurboStream(html), (item) => Boolean(text(item.descriptionPlain) || text(item.descriptionHtml)));
-  if (!record) return "";
-  return text(record.descriptionPlain) ?? stripAshbyHtml(String(record.descriptionHtml));
+  if (!record) return { description: "", postedAt: null, team: null, employmentType: null };
+  return {
+    description: text(record.descriptionPlain) ?? stripAshbyHtml(String(record.descriptionHtml)),
+    postedAt: text(record.publishedDate),
+    team: text(record.teamName),
+    employmentType: text(record.employmentType),
+  };
 }
 
 export async function fetchLatestShopifyJobs() {
@@ -115,25 +133,29 @@ export async function fetchLatestShopifyJobs() {
   // A careers page that decodes to nothing is a format change, not a board with no openings.
   if (listings.length === 0) throw new Error("Shopify careers page carried no postings");
 
-  // One page per posting for its description; whatever the deadline leaves unread stays listed without one.
+  // One page per posting for its description and date; whatever the deadline leaves unread stays listed without them.
   const described = new Map(await mapWithinDeadline(listings, detailConcurrency, startedAt, 40_000, async (listing) => {
     try {
       const page = await fetch(listing.url, { cache: "no-store", signal: AbortSignal.timeout(8_000), headers });
-      return [listing.id, page.ok ? parseShopifyDescription(await page.text()) : ""] as const;
+      return [listing.id, page.ok ? parseShopifyPosting(await page.text()) : null] as const;
     } catch {
-      return [listing.id, ""] as const;
+      return [listing.id, null] as const;
     }
   }));
 
-  return listings.map((listing): GreenhouseJob => ({
-    id: listing.id,
-    title: listing.title,
-    company: board.company,
-    boardToken: board.token,
-    location: listing.location,
-    absoluteUrl: listing.url,
-    contentText: [listing.team, listing.employmentType, described.get(listing.id)].filter(Boolean).join(" "),
-    postedAt: listing.postedAt,
-    updatedAt: null,
-  }));
+  return listings.map((listing): GreenhouseJob => {
+    const posting = described.get(listing.id);
+    return {
+      id: listing.id,
+      title: listing.title,
+      company: board.company,
+      boardToken: board.token,
+      location: listing.location,
+      absoluteUrl: listing.url,
+      contentText: [posting?.team ?? listing.team, posting?.employmentType ?? listing.employmentType, posting?.description]
+        .filter(Boolean).join(" "),
+      postedAt: listing.postedAt ?? posting?.postedAt ?? null,
+      updatedAt: null,
+    };
+  });
 }
