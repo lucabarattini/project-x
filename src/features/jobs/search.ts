@@ -206,7 +206,8 @@ export function parseSearchParams(
  */
 export function pageUrl(params: JobSearchParams) {
   const path = params.portal === "non-tech" ? "/nontech" : params.portal === "internships" ? "/internships" : "/";
-  return `${path}${serializeSearchParams({ ...params, portal: defaultSearchParams.portal })}`;
+  const roleTypes = params.portal === "tech" ? params.roleTypes : defaultSearchParams.roleTypes;
+  return `${path}${serializeSearchParams({ ...params, portal: defaultSearchParams.portal, roleTypes })}`;
 }
 
 /** Serialize filters into a compact query string, omitting default values. */

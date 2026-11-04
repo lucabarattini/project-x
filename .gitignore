@@ -1,5 +1,4 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-00_development-only/
 
 # dependencies
 /node_modules
@@ -14,7 +13,6 @@
 # testing
 /coverage
 
-/development-only
 
 # next.js
 /.next/
