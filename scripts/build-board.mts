@@ -1,8 +1,10 @@
 // Fetches every job source and publishes the board. Runs in GitHub Actions, never on Vercel.
 // Without BLOB_READ_WRITE_TOKEN it only reports, which is how a new runner is tested.
-import { alertKey, isAlertRole, sendAlert } from "../src/features/jobs/alerts";
+import { alertKey, digestDue, isAlertRole, sendAlert } from "../src/features/jobs/alerts";
 import { alertsPath, boardPath, readStored, recentPath, writeStored } from "../src/features/jobs/board-store";
 import { buildBoard, snapshotRejectionReason, type Board } from "../src/features/jobs/service";
+
+type AlertState = { keys: string[]; lastDigest: string | null };
 
 const publishing = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 const previous = publishing ? await readStored<Board>(boardPath) : null;
@@ -25,26 +27,33 @@ if (publishing) {
   await writeStored(recentPath, recent);
   console.log("Published");
 
-  // New roles at the target companies, remote or in Washington, go out by email.
-  // The first build only remembers what is already open, so nobody gets a flood.
+  // New roles at the target companies, remote or in Washington, go out in one
+  // email a day. The first build only remembers what is already open, so
+  // nobody gets a flood; a role is remembered only once an email carried it.
   const matches = board.rows.filter(isAlertRole);
-  const sent = await readStored<string[]>(alertsPath);
-  if (!sent) {
-    await writeStored(alertsPath, matches.map(alertKey));
+  const stored = await readStored<string[] | AlertState>(alertsPath);
+  const state: AlertState | null = Array.isArray(stored) ? { keys: stored, lastDigest: null } : stored;
+  if (!state) {
+    await writeStored(alertsPath, { keys: matches.map(alertKey), lastDigest: null });
     console.log(`Alerts: remembered ${matches.length} open roles; only new ones will be emailed`);
   } else {
-    const known = new Set(sent);
+    const known = new Set(state.keys);
     const fresh = matches.filter((row) => !known.has(alertKey(row)));
     const to = (process.env.ALERT_TO ?? "").split(",").map((address) => address.trim()).filter(Boolean);
     if (fresh.length === 0) {
       console.log("Alerts: nothing new");
+    } else if (!digestDue(state.lastDigest)) {
+      console.log(`Alerts: ${fresh.length} new, waiting for today's digest`);
     } else if (!process.env.ALERT_FROM || to.length === 0) {
       console.log(`Alerts: ${fresh.length} new, not sent because ALERT_FROM or ALERT_TO is missing`);
     } else {
       try {
         sendAlert(fresh, { from: process.env.ALERT_FROM, to, region: process.env.ALERT_REGION ?? "us-east-2" });
-        await writeStored(alertsPath, [...sent, ...fresh.map(alertKey)]);
-        console.log(`Alerts: emailed ${fresh.length} new roles`);
+        await writeStored(alertsPath, {
+          keys: [...state.keys, ...fresh.map(alertKey)],
+          lastDigest: new Date().toISOString().slice(0, 10),
+        });
+        console.log(`Alerts: digest sent with ${fresh.length} new roles`);
       } catch (error) {
         // Not remembered, so the next build tries the same roles again.
         console.error(`Alerts: ${fresh.length} new, not sent, will retry: ${error instanceof Error ? error.message.slice(0, 300) : error}`);
@@ -52,5 +61,6 @@ if (publishing) {
     }
   }
 }
+
 // Provider timeouts leave timers running; the work is done.
 process.exit(0);

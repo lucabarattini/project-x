@@ -19,8 +19,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      # Only the email needs AWS: if signing in fails, the board still builds.
       - uses: aws-actions/configure-aws-credentials@v4
         if: vars.ALERT_ROLE_ARN != ''
+        continue-on-error: true
         with:
           role-to-assume: ${{ vars.ALERT_ROLE_ARN }}
           aws-region: us-east-2
@@ -32,5 +34,5 @@ jobs:
       - run: npx tsx scripts/build-board.mts
         env:
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          ALERT_FROM: ${{ secrets.ALERT_FROM }}
+          ALERT_FROM: Job digest <jobs@lucabarattini.com>
           ALERT_TO: ${{ secrets.ALERT_TO }}
