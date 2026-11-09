@@ -60,16 +60,25 @@ export async function judgeFit(rows: IndexRow[], texts: Map<string, string>, api
   return fits;
 }
 
-export function alertEmail(rows: IndexRow[], skipped = 0) {
+/** "Posted Mon, Nov 9 (today)", counted in calendar days. */
+export function postedLabel(value: string | null, now = new Date()) {
+  if (!value) return "Posting date not given";
+  const date = new Date(value);
+  const day = (moment: Date) => Date.UTC(moment.getUTCFullYear(), moment.getUTCMonth(), moment.getUTCDate());
+  const days = Math.round((day(now) - day(date)) / 86_400_000);
+  const ago = days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+  return `Posted ${date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })} (${ago})`;
+}
+
+export function alertEmail(rows: IndexRow[], skipped = 0, now = new Date()) {
   const sorted = [...rows].sort((left, right) => left[2].localeCompare(right[2]) || left[1].localeCompare(right[1]));
-  const posted = (row: IndexRow) => (row[6] ? row[6].slice(0, 10) : "date not given");
   const intro = `${rows.length} new ${rows.length === 1 ? "role" : "roles"} worth a look at Nordstrom, Shopify and Starbucks, remote in the U.S. or in Washington, since the last digest.`;
   const footer = skipped ? `${skipped} other new ${skipped === 1 ? "role was" : "roles were"} left out as not a fit.` : "";
   return {
     subject: "Daily job digest from Luca",
-    text: `${intro}\n\n${sorted.map((row) => `${row[1]}\n${row[2]} · ${row[4]} · posted ${posted(row)}\n${row[5]}`).join("\n\n")}${footer ? `\n\n${footer}` : ""}`,
+    text: `${intro}\n\n${sorted.map((row) => `${row[1]}\n${row[2]} · ${row[4]}\n${postedLabel(row[6], now)}\n${row[5]}`).join("\n\n")}${footer ? `\n\n${footer}` : ""}`,
     html: `<p>${intro}</p><ul>${sorted.map((row) =>
-      `<li style="margin-bottom:10px"><a href="${escape(row[5])}">${escape(row[1])}</a><br>${escape(row[2])} · ${escape(row[4])} · posted ${posted(row)}</li>`).join("")}</ul>${footer ? `<p style="color:#666">${footer}</p>` : ""}`,
+      `<li style="margin-bottom:10px"><a href="${escape(row[5])}">${escape(row[1])}</a><br>${escape(row[2])} · ${escape(row[4])}<br><b>${postedLabel(row[6], now)}</b></li>`).join("")}</ul>${footer ? `<p style="color:#666">${footer}</p>` : ""}`,
   };
 }
 

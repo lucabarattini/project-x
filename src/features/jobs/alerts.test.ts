@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { alertEmail, alertKey, digestDue, isAlertRole } from "./alerts";
+import { alertEmail, alertKey, digestDue, isAlertRole, postedLabel } from "./alerts";
 import type { IndexRow } from "./search-model";
 
 const row = (company: string, location: string, title = "Financial Analyst"): IndexRow => [
@@ -31,4 +31,13 @@ test("the digest goes out once a day, after the morning hour", () => {
   assert.equal(digestDue(null, new Date("2026-11-10T13:10:00Z")), true);
   assert.equal(digestDue("2026-11-10", new Date("2026-11-10T19:00:00Z")), false);
   assert.equal(digestDue("2026-11-09", new Date("2026-11-10T13:10:00Z")), true);
+});
+
+test("each role in the email says when it was posted", () => {
+  const now = new Date("2026-11-09T15:00:00Z");
+  assert.equal(postedLabel("2026-11-09T00:00:00.000Z", now), "Posted Mon, Nov 9 (today)");
+  assert.equal(postedLabel("2026-11-08T20:00:00.000Z", now), "Posted Sun, Nov 8 (yesterday)");
+  assert.equal(postedLabel("2026-11-05T12:00:00.000Z", now), "Posted Thu, Nov 5 (4 days ago)");
+  assert.equal(postedLabel(null, now), "Posting date not given");
+  assert.match(alertEmail([row("Nordstrom", "Seattle, WA")], 0, now).html, /<b>Posted Mon, Nov 9 \(today\)<\/b>/);
 });
