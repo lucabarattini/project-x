@@ -1,6 +1,6 @@
 // Fetches every job source and publishes the board. Runs in GitHub Actions, never on Vercel.
 // Without BLOB_READ_WRITE_TOKEN it only reports, which is how a new runner is tested.
-import { alertKey, digestDue, isAlertRole, sendAlert } from "../src/features/jobs/alerts";
+import { alertKey, digestDue, isAlertRole, judgeFit, sendAlert } from "../src/features/jobs/alerts";
 import { alertsPath, boardPath, readStored, recentPath, writeStored } from "../src/features/jobs/board-store";
 import { buildBoard, snapshotRejectionReason, type Board } from "../src/features/jobs/service";
 
@@ -28,8 +28,10 @@ if (publishing) {
   console.log("Published");
 
   // New roles at the target companies, remote or in Washington, go out in one
-  // email a day. The first build only remembers what is already open, so
-  // nobody gets a flood; a role is remembered only once an email carried it.
+  // email a day, but only those GPT-6 Luna judges a real fit for Gemma. The
+  // first build only remembers what is already open, so nobody gets a flood.
+  // A role is remembered once it was emailed or judged not a fit; one with no
+  // verdict, or an email that failed, is tried again on the next build.
   const matches = board.rows.filter(isAlertRole);
   const stored = await readStored<string[] | AlertState>(alertsPath);
   const state: AlertState | null = Array.isArray(stored) ? { keys: stored, lastDigest: null } : stored;
@@ -44,20 +46,27 @@ if (publishing) {
       console.log("Alerts: nothing new");
     } else if (!digestDue(state.lastDigest)) {
       console.log(`Alerts: ${fresh.length} new, waiting for today's digest`);
-    } else if (!process.env.ALERT_FROM || to.length === 0) {
-      console.log(`Alerts: ${fresh.length} new, not sent because ALERT_FROM or ALERT_TO is missing`);
+    } else if (!process.env.ALERT_FROM || to.length === 0 || !process.env.OPENAI_API_KEY) {
+      console.log(`Alerts: ${fresh.length} new, not sent because ALERT_FROM, ALERT_TO or OPENAI_API_KEY is missing`);
     } else {
-      try {
-        sendAlert(fresh, { from: process.env.ALERT_FROM, to, region: process.env.ALERT_REGION ?? "us-east-2" });
-        await writeStored(alertsPath, {
-          keys: [...state.keys, ...fresh.map(alertKey)],
-          lastDigest: new Date().toISOString().slice(0, 10),
-        });
-        console.log(`Alerts: digest sent with ${fresh.length} new roles`);
-      } catch (error) {
-        // Not remembered, so the next build tries the same roles again.
-        console.error(`Alerts: ${fresh.length} new, not sent, will retry: ${error instanceof Error ? error.message.slice(0, 300) : error}`);
+      const fits = await judgeFit(fresh, new Map(recent.map((posting) => [posting.key, posting.text])), process.env.OPENAI_API_KEY);
+      const relevant = fresh.filter((row) => fits.get(row) === true);
+      const rejected = fresh.filter((row) => fits.get(row) === false);
+      let sent = false;
+      if (relevant.length > 0) {
+        try {
+          sendAlert(relevant, { from: process.env.ALERT_FROM, to, region: process.env.ALERT_REGION ?? "us-east-2", skipped: rejected.length });
+          sent = true;
+        } catch (error) {
+          console.error(`Alerts: ${relevant.length} to send, failed, will retry: ${error instanceof Error ? error.message.slice(0, 300) : error}`);
+        }
       }
+      const done = [...rejected, ...(sent ? relevant : [])];
+      await writeStored(alertsPath, {
+        keys: [...state.keys, ...done.map(alertKey)],
+        lastDigest: sent ? new Date().toISOString().slice(0, 10) : state.lastDigest,
+      });
+      console.log(`Alerts: ${fresh.length} new, ${relevant.length} a fit${sent ? " and emailed" : ""}, ${rejected.length} not a fit, ${fresh.length - fits.size} without a verdict`);
     }
   }
 }

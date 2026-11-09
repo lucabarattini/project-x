@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { isSeattleArea, isUsRemote } from "./filters";
+import { mapWithinDeadline } from "./providers/concurrency";
 import { targetCompanies } from "./search";
-import type { IndexRow } from "./search-model";
+import { rowKey, type IndexRow } from "./search-model";
 
 /** A role at a target company that is remote in the U.S. or in Washington State. */
 export function isAlertRole(row: IndexRow) {
@@ -21,21 +22,63 @@ export function digestDue(lastDigest: string | null, now = new Date()) {
   return now.getUTCHours() >= digestHourUtc && lastDigest !== now.toISOString().slice(0, 10);
 }
 
-export function alertEmail(rows: IndexRow[]) {
+// Anonymous on purpose: the repository is public.
+const fitQuestion = `Is this job a realistic fit for the candidate below, worth applying to now?
+Fits: financial analyst and senior financial analyst, FP&A, accounting, treasury, pricing, allocator, planner,
+assistant buyer and buyer, merchandising, strategy and operations, business or data analyst, and similar corporate
+roles that lean on financial modeling and analysis. "Senior" analyst titles still fit: judge by the years asked,
+and a role asking for up to about 4 years, or not saying, can fit.
+Not a fit: store, warehouse, manufacturing, security, spa, driver, hourly or seasonal roles; software, hardware or
+security engineering; recruiting; and people-manager or executive roles such as manager of a team, senior manager,
+principal, director or VP.
+Candidate: bachelor's in economics with accounting and business analytics, about one year of full-time consulting in
+consumer and retail (supplier cost models, margin and COGS analysis), strong in Excel, Power BI, SQL and Python.`;
+
+/**
+ * Asks GPT-6 Luna, through OpenAI's Decisions API, whether each role is worth
+ * Gemma's time. A role whose call fails gets no verdict and waits for the next build.
+ */
+export async function judgeFit(rows: IndexRow[], texts: Map<string, string>, apiKey: string) {
+  const fits = new Map<IndexRow, boolean>();
+  await mapWithinDeadline(rows, 10, Date.now(), 90_000, async (row) => {
+    const text = texts.get(rowKey({ boardToken: row[3], id: row[0] })) ?? "";
+    const response = await fetch("https://api.openai.com/v1/decisions", {
+      method: "POST",
+      signal: AbortSignal.timeout(30_000),
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-6-luna",
+        input: `${row[1]} at ${row[2]}, ${row[4]}\n\n${text}`,
+        questions: [{ type: "predicate", name: "fit", instructions: fitQuestion }],
+      }),
+    }).catch(() => null);
+    if (!response?.ok) return;
+    const { answers } = await response.json() as { answers?: Array<{ probability?: number }> };
+    const probability = answers?.[0]?.probability;
+    if (typeof probability === "number") fits.set(row, probability >= 0.5);
+  });
+  return fits;
+}
+
+export function alertEmail(rows: IndexRow[], skipped = 0) {
   const sorted = [...rows].sort((left, right) => left[2].localeCompare(right[2]) || left[1].localeCompare(right[1]));
   const posted = (row: IndexRow) => (row[6] ? row[6].slice(0, 10) : "date not given");
-  const intro = `${rows.length} new ${rows.length === 1 ? "role" : "roles"} at Nordstrom, Shopify and Starbucks, remote in the U.S. or in Washington, since the last digest.`;
+  const intro = `${rows.length} new ${rows.length === 1 ? "role" : "roles"} worth a look at Nordstrom, Shopify and Starbucks, remote in the U.S. or in Washington, since the last digest.`;
+  const footer = skipped ? `${skipped} other new ${skipped === 1 ? "role was" : "roles were"} left out as not a fit.` : "";
   return {
     subject: "Daily job digest from Luca",
-    text: `${intro}\n\n${sorted.map((row) => `${row[1]}\n${row[2]} · ${row[4]} · posted ${posted(row)}\n${row[5]}`).join("\n\n")}`,
+    text: `${intro}\n\n${sorted.map((row) => `${row[1]}\n${row[2]} · ${row[4]} · posted ${posted(row)}\n${row[5]}`).join("\n\n")}${footer ? `\n\n${footer}` : ""}`,
     html: `<p>${intro}</p><ul>${sorted.map((row) =>
-      `<li style="margin-bottom:10px"><a href="${escape(row[5])}">${escape(row[1])}</a><br>${escape(row[2])} · ${escape(row[4])} · posted ${posted(row)}</li>`).join("")}</ul>`,
+      `<li style="margin-bottom:10px"><a href="${escape(row[5])}">${escape(row[1])}</a><br>${escape(row[2])} · ${escape(row[4])} · posted ${posted(row)}</li>`).join("")}</ul>${footer ? `<p style="color:#666">${footer}</p>` : ""}`,
   };
 }
 
 /** Sends through Amazon SES with the AWS CLI, which GitHub's runners and this laptop both have. */
-export function sendAlert(rows: IndexRow[], { from, to, region }: { from: string; to: string[]; region: string }) {
-  const { subject, text, html } = alertEmail(rows);
+export function sendAlert(
+  rows: IndexRow[],
+  { from, to, region, skipped = 0 }: { from: string; to: string[]; region: string; skipped?: number },
+) {
+  const { subject, text, html } = alertEmail(rows, skipped);
   const input = {
     FromEmailAddress: from,
     Destination: { ToAddresses: to },

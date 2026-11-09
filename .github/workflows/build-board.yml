@@ -36,3 +36,4 @@ jobs:
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           ALERT_FROM: Job digest <personal@lucabarattini.com>
           ALERT_TO: ${{ secrets.ALERT_TO }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
