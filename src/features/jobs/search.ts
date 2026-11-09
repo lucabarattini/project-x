@@ -54,8 +54,8 @@ const hedgeFundCompanies = new Set([
   "Marshall Wace", "Qube RT", "Viking Global", "Walleye Capital", "Winton",
 ]);
 
-/** The companies the search is focused on right now. */
-const targetCompanies = new Set(["Shopify", "Starbucks", "Nordstrom"]);
+/** The companies the search is focused on right now; their new roles are also emailed. */
+export const targetCompanies = new Set(["Shopify", "Starbucks", "Nordstrom"]);
 
 const nonTechnicalFamilyIds: Record<NonTechnicalFamily, string> = {
   "Sales & Partnerships": "sales",

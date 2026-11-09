@@ -1,5 +1,4 @@
 import boards from "../../../../data/microsoft-boards.json";
-import { detailConcurrency, mapWithinDeadline, pageConcurrency } from "./concurrency";
 import type { GreenhouseBoard, GreenhouseJob } from "./greenhouse";
 
 /**
@@ -156,45 +155,49 @@ export function parsePcsxCount(json: unknown): number {
  * answers with a mismatched CDN certificate) and moved onto an Eightfold
  * PCSX site. `/api/pcsx/search` is one of the paths their robots.txt allows;
  * the older `/api/apply/v2/jobs` answers 403 "Not authorized for PCSX".
- * A page is capped at 10 rows server-side, so the ~1.1k US openings would take
- * ~110 calls. Microsoft rate-limits that per IP (429, then 403 for a cooldown
- * that outlives a single run), so the crawl is ordered newest-first via
- * `sort_by=timestamp` and bounded: a radar wants the recent end of the board,
- * and stopping at the first 429 keeps the next run's budget intact.
+ *
+ * A page holds 10 rows and Microsoft throttles hard per IP: on 2026-11-09 two
+ * pages 1.5 s apart drew a 429, eight at once all did, and the cooldown
+ * outlived the run. Reading ~60 pages per build therefore failed or stopped
+ * partway on most GitHub runs, and each partial read shrank the board (600 to
+ * 220 roles in five days). So pages are read one at a time, a few seconds
+ * apart, newest first, and only until they stop turning up postings the board
+ * lacks; the build keeps the rest from earlier builds. `known` holds the ids
+ * the board already has. Details are fetched for new postings only.
  */
-export async function fetchLatestPcsxJobs(board: PcsxBoard) {
+export async function fetchLatestPcsxJobs(board: PcsxBoard, known: Set<string> = new Set()) {
   const maxJobs = 600;
-  // Each detail is one more request against Microsoft's per-IP throttle.
-  const maxDetails = 120;
+  const pageSize = 10;
+  const pauseMs = 4_000;
+  const maxDetails = 10;
   const excluded = board.excludeTitlePattern
     ? new RegExp(board.excludeTitlePattern, "iu")
     : null;
-  const pageSize = 10;
   const startedAt = Date.now();
-  const runDeadlineMs = 26_000;
+  const runDeadlineMs = 75_000;
+  const pause = () => new Promise((resolve) => setTimeout(resolve, pauseMs));
+  const headers = {
+    accept: "application/json",
+    referer: board.boardUrl,
+    "user-agent":
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+  };
 
   let rateLimited = false;
 
-  async function readPage(start: number) {
-    if (rateLimited) {
-      return null;
-    }
+  // One retry after a pause: the throttle sometimes lets the next call through.
+  async function readJson(url: string | URL, retried = false): Promise<unknown> {
+    if (rateLimited) return null;
     try {
-      const response = await fetch(`${board.apiUrl}&start=${start}&num=${pageSize}`, {
-        next: { revalidate: 300 },
-        signal: AbortSignal.timeout(10_000),
-        headers: {
-          accept: "application/json",
-          referer: board.boardUrl,
-          "user-agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
-        },
-      });
-      // 429 is the throttle and 403 is the cooldown that follows it; both mean
-      // every further page this run would be wasted.
+      const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(10_000), headers });
+      // 429 is the throttle and 403 is the cooldown that follows it.
       if (response.status === 429 || response.status === 403) {
-        rateLimited = true;
-        return null;
+        if (retried) {
+          rateLimited = true;
+          return null;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20_000));
+        return readJson(url, true);
       }
       return response.ok ? ((await response.json()) as unknown) : null;
     } catch {
@@ -202,39 +205,10 @@ export async function fetchLatestPcsxJobs(board: PcsxBoard) {
     }
   }
 
-  async function readDetail(positionId: string) {
-    const url = new URL("/api/pcsx/position_details", board.apiUrl);
-    url.searchParams.set("position_id", positionId);
-    url.searchParams.set("domain", new URL(board.apiUrl).searchParams.get("domain") ?? "");
-    url.searchParams.set("hl", "en");
-    try {
-      const response = await fetch(url, {
-        next: { revalidate: 3600 },
-        signal: AbortSignal.timeout(8_000),
-        headers: {
-          accept: "application/json",
-          referer: board.boardUrl,
-          "user-agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
-        },
-      });
-      if (response.status === 429 || response.status === 403) {
-        rateLimited = true;
-        return null;
-      }
-      if (!response.ok) return null;
-      return parsePcsxDescription(await response.json());
-    } catch {
-      return null;
-    }
-  }
+  const readPage = (start: number) => readJson(`${board.apiUrl}&start=${start}&num=${pageSize}`);
 
-  // Page one decides whether this run is trustworthy at all. Both failures
-  // below used to `return []`, which runProvider reports as "no openings" —
-  // so the throttle this provider already detects (the 429/403 cooldown
-  // above) reached the dashboard as a quiet day rather than an outage, and
-  // the empty board was cached for a full TTL. This board carries ~1.1k US
-  // openings; zero of them is never the real answer.
+  // Page one decides whether this run is trustworthy at all: a throttled first
+  // page is an outage, never "no openings", so the build keeps the last copy.
   const firstPage = await readPage(0);
   if (firstPage === null) {
     throw new Error(
@@ -243,57 +217,56 @@ export async function fetchLatestPcsxJobs(board: PcsxBoard) {
         : `${board.company} PCSX search page one could not be read`,
     );
   }
-
-  const parsed = parsePcsxPositions(firstPage, board.boardUrl);
-  if (parsed.length === 0) {
+  const first = parsePcsxPositions(firstPage, board.boardUrl);
+  if (first.length === 0) {
     throw new Error(`${board.company} PCSX search page one carried no positions`);
   }
 
-  const total = Math.min(parsePcsxCount(firstPage) || parsed.length, maxJobs);
-  const remainingOffsets = Array.from(
-    { length: Math.max(0, Math.ceil(total / pageSize) - 1) },
-    (_, index) => (index + 1) * pageSize,
-  );
+  // "known" pages count toward stopping; pages of only excluded titles (store
+  // shifts at Starbucks) say nothing either way.
+  const verdict = (page: ParsedPcsxJob[]) => {
+    const kept = page.filter((job) => !excluded?.test(job.title));
+    if (kept.length === 0) return "none";
+    return kept.every((job) => known.has(job.id)) ? "known" : "new";
+  };
 
-  const rest = await mapWithinDeadline(
-    remainingOffsets,
-    pageConcurrency,
-    startedAt,
-    runDeadlineMs,
-    async (start) => parsePcsxPositions(await readPage(start), board.boardUrl),
-  );
+  const total = Math.min(parsePcsxCount(firstPage) || first.length, maxJobs);
+  const listed = [...first];
+  let quiet = verdict(first) === "known" ? 1 : 0;
+  for (let start = pageSize; start < total && quiet < 2 && !rateLimited; start += pageSize) {
+    if (Date.now() - startedAt > runDeadlineMs) break;
+    await pause();
+    const page = parsePcsxPositions(await readPage(start), board.boardUrl);
+    if (page.length === 0) break;
+    listed.push(...page);
+    const seen = verdict(page);
+    if (seen === "known") quiet += 1;
+    if (seen === "new") quiet = 0;
+  }
 
-  const listed = [...parsed, ...rest.flat()]
-    .slice(0, maxJobs)
-    .filter((job) => !excluded?.test(job.title));
+  const kept = listed.filter((job) => !excluded?.test(job.title));
 
-  // Search rows carry no description, so without this every posting read
-  // "Not Stated" for experience. Details are best-effort: past the deadline or
-  // after a throttle the remaining rows keep their list-level text.
+  // Search rows carry no description, so without this a new posting reads
+  // "Not Stated" for experience. Best-effort, and for new postings only.
   const descriptions = new Map<string, string>();
-  await mapWithinDeadline(
-    listed.slice(0, maxDetails),
-    detailConcurrency,
-    startedAt,
-    runDeadlineMs,
-    async (job) => {
-      if (rateLimited) return;
-      const positionId = job.absoluteUrl.match(/\/job\/(\d+)/u)?.[1];
-      if (!positionId) return;
-      const detail = await readDetail(positionId);
-      if (detail) descriptions.set(job.id, detail);
-    },
-  );
+  for (const job of kept.filter((item) => !known.has(item.id)).slice(0, maxDetails)) {
+    if (rateLimited || Date.now() - startedAt > runDeadlineMs) break;
+    const positionId = job.absoluteUrl.match(/\/job\/(\d+)/u)?.[1];
+    if (!positionId) continue;
+    await pause();
+    const url = new URL("/api/pcsx/position_details", board.apiUrl);
+    url.searchParams.set("position_id", positionId);
+    url.searchParams.set("domain", new URL(board.apiUrl).searchParams.get("domain") ?? "");
+    url.searchParams.set("hl", "en");
+    const text = parsePcsxDescription(await readJson(url));
+    if (text) descriptions.set(job.id, text);
+  }
 
-  return listed
-    .map((job) => ({
-      ...job,
-      contentText: descriptions.get(job.id) ?? job.contentText,
-    }))
-    .map((job) => ({
-      ...job,
-      company: board.company,
-      boardToken: board.token,
-      updatedAt: null,
-    })) satisfies GreenhouseJob[];
+  return kept.map((job) => ({
+    ...job,
+    contentText: descriptions.get(job.id) ?? job.contentText,
+    company: board.company,
+    boardToken: board.token,
+    updatedAt: null,
+  })) satisfies GreenhouseJob[];
 }

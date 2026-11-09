@@ -87,8 +87,13 @@ type ProviderRun = {
   /** The board tokens this provider's postings carry, to recognise them in an older snapshot. */
   tokens: string[];
   timeoutMs: number;
+  /** Reads only what is new; the build keeps the rest of its postings from the previous board. */
+  incremental?: boolean;
   run: () => Promise<GreenhouseJob[]>;
 };
+
+/** How long an incremental source keeps a posting it has not re-read. */
+const keepUnreadMs = 30 * 24 * 60 * 60 * 1000;
 
 const TIMEOUT_SENTINEL = "provider-timeout";
 
@@ -146,7 +151,10 @@ async function runProvider(run: ProviderRun): Promise<{ jobs: GreenhouseJob[]; f
   }
 }
 
-function buildProviders(): ProviderRun[] {
+function buildProviders(previous: JobSearchEntry[]): ProviderRun[] {
+  const knownIds = (token: string) => new Set(
+    previous.filter((entry) => entry.job.boardToken === token).map((entry) => String(entry.job.id)),
+  );
   return [
     {
       provider: "greenhouse",
@@ -194,12 +202,13 @@ function buildProviders(): ProviderRun[] {
       run: () => fetchLatestShopifyJobs(),
     },
     // One run per Eightfold site, so a throttled Microsoft never takes
-    // Starbucks down with it.
+    // Starbucks down with it. Paced reads of new postings only (see the provider).
     ...microsoftBoards.map((board) => ({
       provider: board.company.toLowerCase(),
       tokens: [board.token],
-      timeoutMs: 35_000,
-      run: () => fetchLatestPcsxJobs(board),
+      timeoutMs: 120_000,
+      incremental: true,
+      run: () => fetchLatestPcsxJobs(board, knownIds(board.token)),
     })),
     {
       provider: "apple",
@@ -216,10 +225,12 @@ function buildProviders(): ProviderRun[] {
       run: () => fetchLatestMetaJobs(),
     },
     {
+      // Amazon posts 100-190 U.S. roles a weekday: 600 reached back about five
+      // days, while the board covers two weeks. 2,500 reads about two weeks.
       provider: "amazon",
       tokens: amazonBoards.map((board) => board.token),
-      timeoutMs: 30_000,
-      run: () => fetchLatestAmazonJobs({ maxJobs: 600 }),
+      timeoutMs: 60_000,
+      run: () => fetchLatestAmazonJobs({ maxJobs: 2500 }),
     },
     {
       provider: "google",
@@ -251,9 +262,9 @@ function postingKey(job: { company: string; title: string; location: string }) {
  * scripts/build-board.mts: this is the work that used up the Hobby CPU limit.
  */
 export async function buildBoard(previous: Board | null): Promise<{ board: Board; recent: RecentPosting[] }> {
-  const providers = buildProviders();
-  const results = await Promise.all(providers.map(runProvider));
   const previousEntries = (previous?.rows ?? []).map((row) => fromIndexRow(row));
+  const providers = buildProviders(previousEntries);
+  const results = await Promise.all(providers.map(runProvider));
 
   // Apple, Microsoft and Meta refuse datacenter IPs now and then, and a slow
   // board can still miss its budget. Their postings used to vanish from the
@@ -261,16 +272,24 @@ export async function buildBoard(previous: Board | null): Promise<{ board: Board
   // the diagnostic says so. A 404 board is gone and is not kept.
   const carried: JobSearchEntry[] = [];
   results.forEach((result, index) => {
-    const known = previousEntries.filter((entry) => providers[index].tokens.includes(entry.job.boardToken));
-    // Microsoft stops at its first 429, so a throttled run can report ok with
-    // 10 of its 590 postings. Under half of the last count is a cut-off read.
-    if (result.jobs.length > 0 && result.jobs.length * 2 < known.length) {
+    const run = providers[index];
+    const known = previousEntries.filter((entry) => run.tokens.includes(entry.job.boardToken));
+    // A source that stops partway, rate limited or timed out, can still report
+    // ok with a fraction of its postings. Under half of the last count is a
+    // cut-off read. Incremental sources read few rows by design.
+    if (!run.incremental && result.jobs.length > 0 && result.jobs.length * 2 < known.length) {
       result.diagnostic.status = "error";
       result.diagnostic.message = `Cut off at ${result.jobs.length} of ${known.length} postings`;
     }
     const providerFailed = result.diagnostic.status === "error" || result.diagnostic.status === "timeout";
     const companies = new Set(result.failedBoards);
-    const kept = providerFailed ? known : previousEntries.filter((entry) => companies.has(entry.job.company));
+    const read = new Set(result.jobs.map((job) => String(job.id)));
+    const oldest = Date.now() - keepUnreadMs;
+    const kept = providerFailed
+      ? known
+      : run.incremental
+        ? known.filter((entry) => !read.has(String(entry.job.id)) && entry.job.postedAt && Date.parse(entry.job.postedAt) >= oldest)
+        : previousEntries.filter((entry) => companies.has(entry.job.company));
     if (kept.length === 0) return;
     carried.push(...kept);
     result.diagnostic.message = `${result.diagnostic.message ?? ""} — kept ${kept.length} postings from the previous build`.trim();

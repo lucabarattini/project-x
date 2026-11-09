@@ -93,7 +93,7 @@ const remotePattern = /\b(remote|anywhere|distributed|work from home|wfh)\b/u;
 const usMarkerPattern =
   /\b(us|usa|u\.s\.a?\.?|united states|north america|americas|us time ?zones?)\b/u;
 const nonUsRemotePattern =
-  /\b(emea|europe|eu|uk|united kingdom|england|india|canada|apac|asia|latam|brazil|germany|france|spain|poland|portugal|netherlands|ireland|israel|australia|mexico|argentina|colombia|chile|philippines|singapore|japan|international)\b/u;
+  /\b(emea|europe|eu|uk|united kingdom|england|india|canada|apac|asia|latam|brazil|germany|france|spain|poland|portugal|netherlands|ireland|israel|australia|mexico|argentina|colombia|chile|philippines|singapore|japan|international|hong kong|luxembourg|anz|new zealand|china|korea|taiwan|switzerland|sweden|italy|denmark|belgium|austria|norway|finland|czechia|romania|south africa|uae|dubai)\b/u;
 
 export function isSeattleArea(location: string) {
   // Stripe writes its offices as codes: "SF, SEA, CHI, NYC".

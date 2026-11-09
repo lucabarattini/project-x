@@ -8,12 +8,22 @@ on:
     - cron: "17 */6 * * *"
   workflow_dispatch:
 
+# id-token lets the run sign in to AWS without stored keys, to email job alerts.
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: vars.ALERT_ROLE_ARN != ''
+        with:
+          role-to-assume: ${{ vars.ALERT_ROLE_ARN }}
+          aws-region: us-east-2
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -22,3 +32,5 @@ jobs:
       - run: npx tsx scripts/build-board.mts
         env:
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          ALERT_FROM: ${{ secrets.ALERT_FROM }}
+          ALERT_TO: ${{ secrets.ALERT_TO }}

@@ -83,3 +83,10 @@ test("matchesCompany filters by exact company name", () => {
   assert.equal(matchesCompany("Stripe", "Airbnb"), false);
 });
 
+
+test("remote roles pinned to Hong Kong, Luxembourg or ANZ are not U.S. remote", () => {
+  assert.equal(matchesLocation("Remote - Americas", ["remote-us"]), true);
+  for (const location of ["Remote - Hong Kong", "Remote - Luxembourg", "Remote - ANZ"]) {
+    assert.equal(matchesLocation(location, ["remote-us"]), false, location);
+  }
+});
